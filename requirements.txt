@@ -1,0 +1,5 @@
+reactpy[fastapi]==1.1.0
+fastapi==0.115.0
+starlette==0.38.6
+uvicorn
+aiosqlite
