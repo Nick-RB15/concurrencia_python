@@ -5,6 +5,7 @@ from pathlib import Path
 
 from reactpy import component, html, hooks
 from reactpy.backend.fastapi import Options, configure
+from reactpy.core.layout import Layout
 
 import uvicorn
 from fastapi import FastAPI
@@ -18,8 +19,25 @@ from mapa import MapaJuego
 from resultados import PantallaResultados
 
 _estado_global: dict = crear_estado_inicial()
-_suscriptores: list = []                                  
+_suscriptores: list = []
 _tareas_activas: list = []
+
+# ReactPy mantiene una unica pila de hooks (ThreadLocal) por hilo del event loop.
+# Con varias sesiones humanas, sus renders concurren sobre esa pila compartida y
+# la corrompen ("Hook stack is in an invalid state"), tirando la conexion y
+# perdiendo la identidad local del jugador. Serializamos el render de cada layout
+# con un lock asincrono (no bloqueante): cada sesion renderiza por separado y
+# nunca se solapan, sin introducir estado mutable de juego.
+_render_lock = asyncio.Lock()
+_render_original = Layout._create_layout_update
+
+
+async def _render_serializado(self, old_state):
+    async with _render_lock:
+        return await _render_original(self, old_state)
+
+
+Layout._create_layout_update = _render_serializado
 
 def get_estado() -> dict:
     return _estado_global
@@ -28,22 +46,18 @@ def get_estado() -> dict:
 def set_estado(nuevo: dict):
     global _estado_global
     _estado_global = nuevo
-                                                                     
-    for cb in list(_suscriptores):
-        try:
-            cb()
-        except Exception:
-            pass
+    # Notificar a cada sesion suscrita via su propio asyncio.Event (reactivo,
+    # sin callbacks sincronos que disparen renders anidados).
+    for evento in list(_suscriptores):
+        evento.set()
 
 
 def aplicar_accion(accion: dict) -> dict:
-                                                                             
     nuevo = update(get_estado(), accion)
     set_estado(nuevo)
     return nuevo
 
 
-                                                          
 set_state_ref(get_estado, set_estado)
 
 @component
@@ -53,17 +67,18 @@ def ArenaApp():
                                                                
     tick, set_tick = hooks.use_state(0)
 
-    def forzar_rerender():
-        set_tick(lambda t: t + 1)
-
-                                  
     @hooks.use_effect(dependencies=[])
-    def suscribir():
-        _suscriptores.append(forzar_rerender)
-        def desuscribir():
-            if forzar_rerender in _suscriptores:
-                _suscriptores.remove(forzar_rerender)
-        return desuscribir
+    async def suscribir():
+        evento = asyncio.Event()
+        _suscriptores.append(evento)
+        try:
+            while True:
+                await evento.wait()
+                evento.clear()
+                set_tick(lambda t: t + 1)
+        finally:
+            if evento in _suscriptores:
+                _suscriptores.remove(evento)
 
     estado = get_estado()
     fase = estado.get("fase", "lobby")
