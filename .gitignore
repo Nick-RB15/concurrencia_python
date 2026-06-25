@@ -1,0 +1,51 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ===== Entornos virtuales =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Base de datos SQLite (no subir datos locales) =====
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+arena_supervivencia.db
+arena_supervivencia.db-shm
+arena_supervivencia.db-wal
+
+# ===== Empaquetado / build =====
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===== Caches y tests =====
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ===== Entorno / secretos =====
+.env
+.env.*
+
+# ===== Editores / IDE =====
+.vscode/
+.idea/
+*.swp
+
+# ===== Sistema operativo =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
