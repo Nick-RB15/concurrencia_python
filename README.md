@@ -134,7 +134,6 @@ Dependencias externas: `reactpy[fastapi]`, `fastapi`, `uvicorn`, `aiosqlite`
 
 ## 8. Posibles mejoras futuras
 
-- Sincronización de identidad por sesión/WebSocket para partidas verdaderamente multi-dispositivo.
 - Más tipos de eventos, recursos y modos de juego.
 - Bots con IA más avanzada (predicción de zona, evasión de oponentes).
 - Pantalla de estadísticas históricas y gráficas a partir de `historial_eventos`.
