@@ -22,12 +22,6 @@ _estado_global: dict = crear_estado_inicial()
 _suscriptores: list = []
 _tareas_activas: list = []
 
-# ReactPy mantiene una unica pila de hooks (ThreadLocal) por hilo del event loop.
-# Con varias sesiones humanas, sus renders concurren sobre esa pila compartida y
-# la corrompen ("Hook stack is in an invalid state"), tirando la conexion y
-# perdiendo la identidad local del jugador. Serializamos el render de cada layout
-# con un lock asincrono (no bloqueante): cada sesion renderiza por separado y
-# nunca se solapan, sin introducir estado mutable de juego.
 _render_lock = asyncio.Lock()
 _render_original = Layout._create_layout_update
 
@@ -46,8 +40,6 @@ def get_estado() -> dict:
 def set_estado(nuevo: dict):
     global _estado_global
     _estado_global = nuevo
-    # Notificar a cada sesion suscrita via su propio asyncio.Event (reactivo,
-    # sin callbacks sincronos que disparen renders anidados).
     for evento in list(_suscriptores):
         evento.set()
 
