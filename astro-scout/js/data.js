@@ -1,0 +1,264 @@
+/* =========================================================================
+   ASTRO SCOUT — DATOS DE LA ACADEMIA
+   -------------------------------------------------------------------------
+   Todo el contenido editable vive aqui: estaciones, modelos 3D, puntos
+   interactivos (hotspots), base de conocimiento para el Instructor IA y
+   los gestos esperados. No hace falta tocar el codigo para cambiar textos.
+   ========================================================================= */
+
+// Orden oficial de la mision (define el progreso y el desbloqueo)
+export const STATION_ORDER = ["casco", "brujula", "botiquin", "panel", "guante"];
+
+export const STATIONS = {
+  casco: {
+    key: "casco",
+    callsign: "ESTACIÓN 01 · SUJECIÓN DE EQUIPO",
+    name: "Casco de vuelo",
+    icon: "🪖",
+    color: "#4da6ff",
+    skill: "Asegurar correctamente el equipo antes de una salida espacial.",
+    src: "models/casco.glb",
+    mission:
+      "Revisa el sellado del casco y confirma que el visor esté correctamente asegurado antes de continuar con la misión.",
+    gesture:
+      "Gesto esperado: mano abierta frente a la cámara para confirmar 'equipo asegurado'.",
+    hotspots: [
+      { pos: "0 0.55 0.5", normal: "0 0 1", title: "Visor", text: "Protege del sol directo y de micrometeoritos." },
+      { pos: "0.55 0 0.2", normal: "1 0 0", title: "Broche lateral", text: "Debe quedar trabado, no solo apoyado." },
+      { pos: "0 -0.6 0.3", normal: "0 -1 0", title: "Anillo de sellado", text: "Conecta el casco al traje y mantiene la presión." }
+    ],
+    xp: 100
+  },
+  brujula: {
+    key: "brujula",
+    callsign: "ESTACIÓN 02 · ORIENTACIÓN",
+    name: "Brújula de navegación",
+    icon: "🧭",
+    color: "#ffb347",
+    skill: "Trazar una ruta segura hacia la base usando el mapa estelar.",
+    src: "models/brujula.glb",
+    mission:
+      "Observa el mapa holográfico y determina la dirección correcta hacia la base lunar.",
+    gesture:
+      "Gesto esperado: señalar con el dedo índice la dirección elegida.",
+    hotspots: [
+      { pos: "0 0.7 0.2", normal: "0 1 0", title: "Aguja", text: "Apunta a la referencia estelar principal." },
+      { pos: "0.9 0 0.2", normal: "1 0 0", title: "Anillo graduado", text: "Marca los grados para trazar el rumbo." }
+    ],
+    xp: 120
+  },
+  botiquin: {
+    key: "botiquin",
+    callsign: "ESTACIÓN 03 · PRIMEROS AUXILIOS",
+    name: "Botiquín espacial",
+    icon: "🧰",
+    color: "#3ddc97",
+    skill: "Atender a un compañero herido con procedimientos básicos.",
+    src: "models/botiquin.glb",
+    mission:
+      "Un compañero de tripulación está herido en Marte. Sigue los pasos de primeros auxilios que indica el instructor.",
+    gesture:
+      "Gesto esperado: sonrisa para confirmar que el procedimiento fue completado con éxito.",
+    hotspots: [
+      { pos: "0 0 0.4", normal: "0 0 1", title: "Cruz médica", text: "Identifica el kit de emergencia de la tripulación." },
+      { pos: "0.7 0 0.2", normal: "1 0 0", title: "Cierre hermético", text: "Mantiene el contenido estéril en vacío." }
+    ],
+    xp: 140
+  },
+  panel: {
+    key: "panel",
+    callsign: "ESTACIÓN 04 · MANEJO DE RECURSOS",
+    name: "Panel de oxígeno",
+    icon: "🫧",
+    color: "#8a7dff",
+    skill: "Racionar oxígeno y energía durante un viaje prolongado.",
+    src: "models/panel_oxigeno.glb",
+    mission:
+      "Administra los niveles de oxígeno y energía de la nave sin quedarte sin reservas antes de llegar a destino.",
+    gesture:
+      "Gesto esperado: puño cerrado para confirmar 'recursos asegurados'.",
+    hotspots: [
+      { pos: "-0.55 0.2 0.15", normal: "0 0 1", title: "Reserva O₂", text: "Nunca bajes de la reserva mínima de emergencia." },
+      { pos: "0.55 0.2 0.15", normal: "0 0 1", title: "Energía", text: "Prioriza el oxígeno si tienes que elegir." }
+    ],
+    xp: 160
+  },
+  guante: {
+    key: "guante",
+    callsign: "ESTACIÓN 05 · TRABAJO EN EQUIPO",
+    name: "Guante de sincronización",
+    icon: "🧤",
+    color: "#ff6fae",
+    skill: "Coordinarte con tu tripulación en tiempo real.",
+    src: "models/guante.glb",
+    mission:
+      "Sincroniza tu guante con el de tu compañero de tripulación para completar la maniobra conjunta.",
+    gesture:
+      "Gesto esperado: choque de manos (high-five) frente a la cámara.",
+    hotspots: [
+      { pos: "0 0.75 0.2", normal: "0 0 1", title: "Sensores de dedo", text: "Miden la posición de cada dedo para sincronizar." },
+      { pos: "0 0 0.25", normal: "0 0 1", title: "Palma háptica", text: "Vibra cuando la maniobra se completa." }
+    ],
+    xp: 180
+  }
+};
+
+/* -------------------------------------------------------------------------
+   BASE DE CONOCIMIENTO DEL INSTRUCTOR IA
+   Cada estacion tiene: saludo, pistas progresivas, mensaje de completado,
+   y una lista de preguntas/respuestas (faq) con palabras clave.
+   El motor de respuestas puntua por coincidencia de palabras clave, asi que
+   el cadete puede "hacerle preguntas" reales, no solo comandos fijos.
+   ------------------------------------------------------------------------- */
+export const KNOWLEDGE = {
+  casco: {
+    saludo:
+      "Cadete, bienvenido a la estación de sujeción de equipo. Tu casco debe quedar completamente asegurado antes de cualquier salida. Pregúntame lo que quieras o di 'pista' si necesitas ayuda.",
+    pistas: [
+      "Primera pista: revisa que el sello del visor esté firme, sin espacios de aire.",
+      "Segunda pista: los broches laterales deben estar trabados, no solo apoyados.",
+      "Última pista: cuando todo esté asegurado, muestra la mano abierta frente a la cámara para confirmar."
+    ],
+    completado:
+      "Excelente trabajo, cadete. Equipo asegurado correctamente. Puedes avanzar a la siguiente estación.",
+    quiz: {
+      q: "Antes de salir al espacio, ¿qué debes revisar primero en el casco?",
+      opciones: ["El color del visor", "El sellado y los broches", "La batería de la radio"],
+      correcta: 1,
+      exito: "¡Correcto! Sin un buen sellado no hay presión ni oxígeno seguro."
+    },
+    faq: [
+      { k: ["para que", "sirve", "casco", "funcion"], a: "El casco mantiene la presión, aporta oxígeno respirable y protege tu cabeza de la radiación y los micrometeoritos." },
+      { k: ["visor", "vidrio", "cristal"], a: "El visor filtra la luz solar directa (muy intensa en el espacio) y está reforzado contra impactos. Debe quedar perfectamente sellado." },
+      { k: ["oxigeno", "respirar", "aire"], a: "El oxígeno llega por el anillo de sellado que conecta el casco con el traje. Por eso el sellado es tan importante." },
+      { k: ["broche", "traba", "seguro", "cierre"], a: "Los broches laterales deben quedar trabados con un clic firme, no solo apoyados. Si quedan flojos, pierdes presión." },
+      { k: ["radiacion", "sol", "rayos"], a: "El casco bloquea gran parte de la radiación solar y ultravioleta, que en el espacio no tiene la atmósfera de la Tierra para frenarla." },
+      { k: ["temperatura", "frio", "calor"], a: "El casco ayuda a aislar la temperatura: en el espacio se pasa de más de 120 °C al sol a menos de -100 °C en sombra." }
+    ]
+  },
+  brujula: {
+    saludo:
+      "Estación de orientación activada. Necesitas trazar la ruta correcta hacia la base usando el mapa estelar. Pregúntame lo que quieras o di 'pista' si te trabas.",
+    pistas: [
+      "Primera pista: observa el punto más brillante del mapa, ahí suele estar la referencia principal.",
+      "Segunda pista: la base siempre está en la dirección opuesta a la estrella de emergencia.",
+      "Última pista: cuando tengas la dirección clara, señala con el dedo índice hacia la cámara."
+    ],
+    completado:
+      "Ruta confirmada, cadete. Buena orientación. Continúa a la siguiente estación.",
+    quiz: {
+      q: "¿Qué usas para orientarte cuando no hay campo magnético como en la Tierra?",
+      opciones: ["Las estrellas de referencia", "El viento", "El GPS del móvil"],
+      correcta: 0,
+      exito: "¡Exacto! En el espacio profundo navegamos con estrellas guía y giroscopios."
+    },
+    faq: [
+      { k: ["para que", "sirve", "brujula", "funcion"], a: "La brújula de navegación te ayuda a trazar un rumbo usando referencias estelares y el anillo graduado en grados." },
+      { k: ["aguja", "apunta", "norte"], a: "En el espacio no hay 'norte' magnético como en la Tierra; la aguja se alinea con una estrella de referencia elegida." },
+      { k: ["estrella", "referencia", "guia"], a: "Se elige una estrella brillante y estable como referencia. Los astronautas históricamente usaron estrellas guía para navegar." },
+      { k: ["grados", "anillo", "rumbo", "ruta"], a: "El anillo graduado marca los 360°. Fijas el rumbo alineando la aguja con el grado hacia tu destino." },
+      { k: ["gps", "satelite"], a: "El GPS solo funciona cerca de la Tierra. Lejos se usa navegación inercial (giroscopios) y observación de estrellas." },
+      { k: ["base", "lunar", "destino"], a: "Para llegar a la base, fija la dirección opuesta a la estrella de emergencia y mantén el rumbo con el anillo graduado." }
+    ]
+  },
+  botiquin: {
+    saludo:
+      "Estación de primeros auxilios. Un compañero de tripulación necesita atención inmediata. Pregúntame lo que quieras o di 'pista' si necesitas guía.",
+    pistas: [
+      "Primera pista: verifica primero que el compañero esté consciente y respirando.",
+      "Segunda pista: aplica el procedimiento básico de estabilización antes de mover a la persona.",
+      "Última pista: cuando el procedimiento esté completo, sonríe frente a la cámara para confirmar."
+    ],
+    completado:
+      "Procedimiento completado con éxito. Tu compañero está estable. Avanza a la siguiente estación.",
+    quiz: {
+      q: "¿Cuál es el primer paso al atender a un compañero herido?",
+      opciones: ["Moverlo rápido", "Ver si está consciente y respira", "Darle agua"],
+      correcta: 1,
+      exito: "¡Bien! Primero evalúas consciencia y respiración antes de actuar."
+    },
+    faq: [
+      { k: ["para que", "sirve", "botiquin", "funcion"], a: "El botiquín contiene lo básico para estabilizar a un compañero herido hasta llegar a atención médica completa." },
+      { k: ["primer paso", "primero", "empiezo", "empezar"], a: "El primer paso siempre es comprobar si la persona está consciente y respira, sin moverla bruscamente." },
+      { k: ["respira", "respiracion", "consciente"], a: "Comprueba respiración y consciencia. Si no respira, se inicia el protocolo de reanimación adaptado al traje." },
+      { k: ["mover", "trasladar"], a: "No muevas a la persona hasta estabilizarla, salvo peligro inmediato. Un mal traslado puede empeorar una lesión." },
+      { k: ["herida", "sangre", "corte"], a: "Ante una herida, aplica presión para detener el sangrado y cubre para evitar contaminación en el ambiente." },
+      { k: ["marte", "gravedad", "espacio"], a: "En baja gravedad los objetos y fluidos flotan; por eso los kits médicos espaciales van sujetos y sellados." }
+    ]
+  },
+  panel: {
+    saludo:
+      "Estación de manejo de recursos. Debes racionar el oxígeno y la energía de la nave. Pregúntame lo que quieras o di 'pista' si lo necesitas.",
+    pistas: [
+      "Primera pista: no consumas más del 20% de una reserva en un solo paso.",
+      "Segunda pista: prioriza siempre el oxígeno sobre la energía si debes elegir.",
+      "Última pista: cuando termines de administrar los recursos, cierra el puño frente a la cámara."
+    ],
+    completado:
+      "Recursos administrados correctamente. La nave está estable. Avanza a la siguiente estación.",
+    quiz: {
+      q: "Si tienes que elegir entre gastar oxígeno o energía, ¿qué priorizas?",
+      opciones: ["La energía", "El oxígeno", "Da igual"],
+      correcta: 1,
+      exito: "¡Correcto! Sin oxígeno no hay tripulación que valga."
+    },
+    faq: [
+      { k: ["para que", "sirve", "panel", "funcion"], a: "El panel de oxígeno controla las reservas de aire y energía de la nave y te avisa cuando bajan de niveles seguros." },
+      { k: ["oxigeno", "aire", "o2"], a: "El oxígeno es el recurso crítico: siempre debes mantener una reserva mínima de emergencia intocable." },
+      { k: ["energia", "bateria", "electricidad"], a: "La energía alimenta soporte vital, comunicaciones y propulsión. Se raciona, pero por debajo del oxígeno en prioridad." },
+      { k: ["prioridad", "elegir", "priorizar"], a: "Regla de oro: primero el oxígeno, luego la energía. Sin aire no hay misión." },
+      { k: ["reserva", "minimo", "cuanto", "20"], a: "No consumas más del 20% de una reserva en un solo paso y nunca toques la reserva de emergencia." },
+      { k: ["reciclar", "co2", "dioxido"], a: "Las naves reciclan el CO₂ y parte del agua para estirar las reservas en viajes largos." }
+    ]
+  },
+  guante: {
+    saludo:
+      "Última estación: sincronización de tripulación. Debes coordinarte con tu compañero para completar la maniobra. Pregúntame lo que quieras o di 'pista' si necesitas ayuda.",
+    pistas: [
+      "Primera pista: la sincronización requiere que ambos confirmen al mismo tiempo.",
+      "Segunda pista: espera la señal visual antes de actuar.",
+      "Última pista: realiza un choque de manos frente a la cámara para completar el entrenamiento."
+    ],
+    completado:
+      "¡Sincronización perfecta! Has completado el entrenamiento de la Academia Espacial, cadete.",
+    quiz: {
+      q: "¿Por qué es clave el trabajo en equipo en una misión espacial?",
+      opciones: ["Para competir", "Para coordinar maniobras y seguridad", "No es importante"],
+      correcta: 1,
+      exito: "¡Perfecto! En el espacio, la coordinación salva vidas."
+    },
+    faq: [
+      { k: ["para que", "sirve", "guante", "funcion"], a: "El guante de sincronización mide la posición de tus dedos y coordina tus movimientos con los de tu compañero en tiempo real." },
+      { k: ["sensor", "dedo", "mide"], a: "Sensores en cada dedo detectan la postura de tu mano para replicar maniobras exactas entre miembros de la tripulación." },
+      { k: ["haptico", "vibra", "vibracion"], a: "La palma háptica vibra para confirmar que la maniobra conjunta se completó correctamente." },
+      { k: ["equipo", "coordinar", "compañero", "sincroniz"], a: "El trabajo en equipo permite ejecutar maniobras que una sola persona no podría hacer con seguridad." },
+      { k: ["señal", "cuando", "actuar"], a: "Espera siempre la señal visual acordada antes de actuar: la sincronización requiere que ambos confirmen a la vez." }
+    ]
+  }
+};
+
+/* Respuestas generales (funcionan en cualquier estacion) */
+export const GENERIC = {
+  pista: ["pista", "ayuda", "no se", "no sé", "trabado", "atascado", "help", "hint"],
+  completado: ["listo", "termine", "terminé", "completado", "hecho", "ya esta", "ya está", "acabe", "acabé"],
+  repetir: ["repite", "repetir", "otra vez", "no entendi", "no entendí", "de nuevo"],
+  saludo: ["hola", "buenas", "hey", "instructor", "buenos dias", "buenas tardes"],
+  gracias: ["gracias", "genial", "perfecto", "excelente"],
+  quiz: ["quiz", "examen", "pregunta", "preguntame", "pruebame", "test"],
+  siguiente: ["siguiente", "continuar", "avanzar", "proxima", "próxima"],
+  gesto: ["gesto", "camara", "cámara", "como confirmo", "cómo confirmo", "confirmar"]
+};
+
+/* Datos curiosos del espacio para el modo "dato curioso" del instructor */
+export const FACTS = [
+  "En el espacio no se puede silbar ni hablar: el sonido necesita aire para viajar.",
+  "Un día en Venus dura más que su año: gira sobre sí mismo muy despacio.",
+  "Los astronautas pueden crecer hasta 3 cm en el espacio por la falta de gravedad.",
+  "El Sol representa el 99,8% de la masa de todo el sistema solar.",
+  "Neptuno tarda 165 años terrestres en dar una vuelta al Sol.",
+  "La Estación Espacial Internacional viaja a unos 28.000 km/h.",
+  "En Marte, los atardeceres se ven de color azul.",
+  "Hay más estrellas en el universo que granos de arena en todas las playas de la Tierra.",
+  "El olor del espacio, según los astronautas, recuerda a metal quemado y carne asada.",
+  "La huella de Neil Armstrong sigue en la Luna: no hay viento que la borre."
+];

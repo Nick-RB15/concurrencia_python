@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astro Scout · Academia Espacial</title>
+<link rel="icon" type="image/png" href="assets/logo.png">
+<meta name="description" content="Astro Scout · Academia Espacial: entrenamiento inmersivo con modelos 3D, instructor IA y validación de gestos por cámara.">
+<meta name="theme-color" content="#070b14">
+<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<canvas id="starfield"></canvas>
+<canvas id="confetti"></canvas>
+<div id="toasts"></div>
+
+<div class="app">
+
+  <div class="hud-bar">
+    <span class="hud-left">
+      <img class="hud-logo" src="assets/logo.png" alt="Astro Scout">
+      <span><span class="hud-dot"></span><span class="brand">ASTRO SCOUT</span> // ACADEMIA ESPACIAL</span>
+    </span>
+    <span class="hud-right">
+      <span class="hud-metric">XP <b id="hud-xp">0</b></span>
+      <span class="rank-chip" id="hud-rank">RECLUTA</span>
+      <span id="hud-clock">SISTEMA EN LÍNEA</span>
+    </span>
+  </div>
+
+  <!-- ============ HUB VIEW ============ -->
+  <div id="view-hub">
+    <div class="hub-title">Panel de entrenamiento</div>
+    <h1 class="hub-headline">Bienvenido, cadete.</h1>
+    <p class="hub-sub">
+      Cada estación pone a prueba una habilidad real de exploración espacial.
+      Escanea el QR de la estación, selecciónala aquí, o actívala con la mano.
+      Completa cada gesto para desbloquear la siguiente y subir de rango.
+    </p>
+
+    <div class="hub-actions">
+      <button class="btn primary" id="btn-handnav">🖐 Navegar con la mano</button>
+      <button class="btn" id="btn-qr">📱 Códigos QR</button>
+      <button class="btn" id="btn-badges">🏅 Insignias</button>
+      <button class="btn" id="btn-fact">✨ Dato curioso</button>
+      <button class="btn" id="btn-sound">🔊 Sonido</button>
+      <button class="btn danger" id="btn-reset">↺ Reiniciar</button>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-label">
+        <span id="progress-count">0/5 ESTACIONES</span>
+        <span id="progress-pct">0% COMPLETADO</span>
+      </div>
+    </div>
+
+    <div class="station-grid" id="station-grid"></div>
+  </div>
+
+  <!-- ============ STATION VIEW ============ -->
+  <div id="view-station" style="display:none;">
+    <button class="back-link" id="btn-back">← Volver al panel</button>
+
+    <div class="station-header">
+      <div class="callsign" id="st-callsign"></div>
+      <h1 id="st-name"></h1>
+      <p id="st-skill"></p>
+    </div>
+
+    <div class="viewer-frame" data-tag="VISOR 3D · INTERACTIVO">
+      <model-viewer id="st-model" camera-controls auto-rotate shadow-intensity="1"
+        exposure="0.9" tone-mapping="neutral" ar ar-modes="webxr scene-viewer quick-look"
+        interaction-prompt="auto" camera-orbit="0deg 75deg 105%">
+      </model-viewer>
+      <div class="viewer-toolbar">
+        <button class="tool-btn active" id="tb-rotate" title="Auto-rotación">⟳</button>
+        <button class="tool-btn" id="tb-reset" title="Reiniciar vista">⌂</button>
+        <button class="tool-btn" id="tb-ar" title="Ver en tu espacio (AR)">◧</button>
+        <button class="tool-btn" id="tb-fs" title="Pantalla completa">⛶</button>
+      </div>
+    </div>
+
+    <div class="panel-row">
+      <div class="panel">
+        <h3>Misión</h3>
+        <p id="st-mission"></p>
+        <p style="margin-top:10px;color:var(--text-mute);font-size:13px;">
+          Toca los puntos <span style="color:var(--glow)">azules</span> del modelo 3D para inspeccionar cada parte del equipo.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>Instructor IA</h3>
+        <p>Pregúntale lo que quieras sobre esta estación, pídele pistas, un quiz, o valida por voz. Puedes borrar mensajes o limpiar el chat cuando quieras.</p>
+        <div id="chatbot-widget"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>
+        <span>Validación por gesto</span>
+        <span class="gesture-state" id="st-gesture-state">PENDIENTE</span>
+      </h3>
+      <p id="st-gesture"></p>
+      <div id="tracking-widget"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ MODAL: CÓDIGOS QR ============ -->
+<div class="modal-backdrop" id="modal-qr">
+  <div class="modal">
+    <button class="modal-close" data-close="modal-qr">×</button>
+    <h2>Códigos QR de las estaciones</h2>
+    <p class="sub">Imprime y coloca cada código en su estación física. Al escanearlo se abre directamente esa estación.</p>
+    <div class="qr-grid">
+      <div class="qr-item" data-key="casco"><img src="qr/qr-casco.png" alt="QR Casco"><span>01 · Casco</span></div>
+      <div class="qr-item" data-key="brujula"><img src="qr/qr-brujula.png" alt="QR Brújula"><span>02 · Brújula</span></div>
+      <div class="qr-item" data-key="botiquin"><img src="qr/qr-botiquin.png" alt="QR Botiquín"><span>03 · Botiquín</span></div>
+      <div class="qr-item" data-key="panel"><img src="qr/qr-panel.png" alt="QR Panel"><span>04 · Panel O₂</span></div>
+      <div class="qr-item" data-key="guante"><img src="qr/qr-guante.png" alt="QR Guante"><span>05 · Guante</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: INSIGNIAS ============ -->
+<div class="modal-backdrop" id="modal-badges">
+  <div class="modal">
+    <button class="modal-close" data-close="modal-badges">×</button>
+    <h2>Insignias de cadete</h2>
+    <p class="sub">Completa cada estación para desbloquear su insignia y ganar el rango de Astro Scout.</p>
+    <div class="badge-grid" id="badge-grid"></div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+<script type="module" src="js/chatbot.js"></script>
+<script type="module" src="js/tracking.js"></script>
+<script>
+  // Conecta el botón de navegación con la mano una vez cargados los módulos
+  window.addEventListener("load", () => {
+    document.getElementById("btn-handnav")?.addEventListener("click", () => {
+      window.AstroScoutTracking?.toggleHandNav?.();
+    });
+  });
+</script>
+</body>
+</html>
