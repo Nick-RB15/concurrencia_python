@@ -65,6 +65,52 @@ function detectSmile(blendshapes) {
   return (((l ? l.score : 0) + (r ? r.score : 0)) / 2) > 0.4;
 }
 
+/* ---- Landmark-based gesture fallback ---- */
+// MediaPipe hand landmarks: 0=wrist, 4=thumb_tip, 5=index_mcp, 6=index_pip,
+// 7=index_dip, 8=index_tip, 9=middle_mcp, 12=middle_tip, 16=ring_tip, 20=pinky_tip
+function isFingerExtended(lm, tipIdx, mcpIdx) {
+  return lm[tipIdx].y < lm[mcpIdx].y - 0.04;
+}
+function isFingerCurled(lm, tipIdx, mcpIdx) {
+  return lm[tipIdx].y > lm[mcpIdx].y - 0.02;
+}
+
+function detectGestureFromLandmarks(lm) {
+  if (!lm || lm.length < 21) return null;
+  const indexUp = isFingerExtended(lm, 8, 5);
+  const middleUp = isFingerExtended(lm, 12, 9);
+  const ringUp = isFingerExtended(lm, 16, 13);
+  const pinkyUp = isFingerExtended(lm, 20, 17);
+  const thumbOut = Math.abs(lm[4].x - lm[3].x) > 0.04 || lm[4].y < lm[3].y - 0.03;
+
+  // Pointing_Up: index extended, rest curled
+  if (indexUp && !middleUp && !ringUp && !pinkyUp) return "Pointing_Up";
+  // Victory: index + middle extended, rest curled
+  if (indexUp && middleUp && !ringUp && !pinkyUp) return "Victory";
+  // Thumb_Up: thumb clearly above its IP joint, all fingers curled
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp && lm[4].y < lm[3].y - 0.06) return "Thumb_Up";
+  // Open_Palm: 4+ fingers extended
+  if (indexUp && middleUp && ringUp && pinkyUp) return "Open_Palm";
+  // Closed_Fist: all fingers curled
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp && !thumbOut) return "Closed_Fist";
+
+  return null;
+}
+
+// Resolve gesture: prefer MediaPipe if confident, else use landmark fallback
+function resolveGesture(top, lm) {
+  const mpGesture = top?.categoryName || "None";
+  const mpScore = top?.score || 0;
+  // If MediaPipe is confident, trust it
+  if (mpGesture !== "None" && mpScore > 0.55) return mpGesture;
+  // Landmark fallback
+  const lmGesture = detectGestureFromLandmarks(lm);
+  if (lmGesture) return lmGesture;
+  // Low-confidence MediaPipe is still better than nothing
+  if (mpGesture !== "None" && mpScore > DETECTION_THRESHOLD) return mpGesture;
+  return "None";
+}
+
 /* ---- Shared drawing helpers ---- */
 function drawStar(ctx, cx, cy, outerR, innerR, points) {
   ctx.beginPath();
@@ -1233,7 +1279,6 @@ function handleMinigame(station, gesture, res, statusEl) {
   }
 
   const lm = res.landmarks[0];
-  const top = res.gestures[0][0];
   const tipIdx = lm[8]; // index fingertip
   const palm = lm[9];   // palm center
   const fx = (1 - tipIdx.x) * stCanvas.width;
@@ -1243,7 +1288,7 @@ function handleMinigame(station, gesture, res, statusEl) {
 
   if (station === "brujula") {
     brujulaState.fingerPos = { x: fx, y: fy };
-    if (top.categoryName === "Pointing_Up" && top.score > DETECTION_THRESHOLD) {
+    if (gesture === "Pointing_Up") {
       brujulaShoot(fx, fy, stCanvas);
     }
     if (brujulaState.score >= brujulaState.needed && !brujulaState.completed) {
@@ -1254,7 +1299,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawBrujulaGame(stCtx, stCanvas);
   } else if (station === "casco") {
-    const done = updateCascoGame(top.categoryName, { x: px, y: py });
+    const done = updateCascoGame(gesture2, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "CASCO ASEGURADO";
@@ -1262,7 +1307,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawCascoGame(stCtx, stCanvas);
   } else if (station === "botiquin") {
-    const done = updateBotiquinGame(top.categoryName, { x: px, y: py });
+    const done = updateBotiquinGame(gesture2, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "COMPANERO ESTABILIZADO";
@@ -1270,7 +1315,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawBotiquinGame(stCtx, stCanvas);
   } else if (station === "panel") {
-    const done = updatePanelGame(top.categoryName, { x: px, y: py });
+    const done = updatePanelGame(gesture2, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "TANQUE REPARADO";
@@ -1278,7 +1323,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawPanelGame(stCtx, stCanvas);
   } else if (station === "guante") {
-    const done = updateGuanteGame(top.categoryName, { x: px, y: py });
+    const done = updateGuanteGame(gesture2, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "SISTEMA ELECTRICO REPARADO";
@@ -1301,18 +1346,20 @@ function stLoop(statusEl, readEl, confEl) {
       const res = gestureRecognizer.recognizeForVideo(stVideo, now);
       if (res.gestures && res.gestures.length) {
         const top = res.gestures[0][0];
-        if (readEl) readEl.textContent = "Detectado: " + (GESTURE_ES[top.categoryName] || top.categoryName);
+        const lm = res.landmarks && res.landmarks[0];
+        const resolved = resolveGesture(top, lm);
+        if (readEl) readEl.textContent = "Detectado: " + (GESTURE_ES[resolved] || resolved);
         if (confEl) confEl.style.width = Math.round(top.score * 100) + "%";
 
         // Check if this station has a mini-game
         if (MINIGAME_STATIONS.includes(station)) {
-          handleMinigame(station, top.categoryName, res, statusEl);
+          handleMinigame(station, resolved, res, statusEl);
           stRaf = requestAnimationFrame(() => stLoop(statusEl, readEl, confEl));
           return;
         }
 
         // Default gesture matching for stations without mini-games
-        matched = top.categoryName === expected.value && top.score > DETECTION_THRESHOLD;
+        matched = resolved === expected.value;
         if (!matched && res.gestures[0].length > 1) {
           const alt = res.gestures[0][1];
           if (alt.categoryName === expected.value && alt.score > 0.25) matched = true;
