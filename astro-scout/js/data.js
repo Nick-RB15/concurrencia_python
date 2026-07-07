@@ -16,12 +16,12 @@ export const STATIONS = {
     name: "Casco de vuelo",
     icon: "🪖",
     color: "#4da6ff",
-    skill: "Asegurar correctamente el equipo antes de una salida espacial.",
+    skill: "Asegurar correctamente el equipo antes de una salida espacial. Agarra el casco y colocalo en el astronauta.",
     src: "models/casco.glb",
     mission:
-      "Revisa el sellado del casco y confirma que el visor esté correctamente asegurado antes de continuar con la misión.",
+      "Agarra el casco con el puño y colócalo sobre la cabeza del astronauta. Abre la mano sobre la zona de la cabeza para asegurarlo.",
     gesture:
-      "Gesto esperado: mano abierta frente a la cámara para confirmar 'equipo asegurado'.",
+      "Cierra el puño para agarrar el casco, llévalo a la cabeza del astronauta y abre la mano para colocarlo.",
     hotspots: [
       { pos: "0 0.55 0.5", normal: "0 0 1", title: "Visor", text: "Protege del sol directo y de micrometeoritos." },
       { pos: "0.55 0 0.2", normal: "1 0 0", title: "Broche lateral", text: "Debe quedar trabado, no solo apoyado." },
@@ -35,12 +35,12 @@ export const STATIONS = {
     name: "Brújula de navegación",
     icon: "🧭",
     color: "#ffb347",
-    skill: "Trazar una ruta segura hacia la base usando el mapa estelar.",
+    skill: "Trazar una ruta segura disparando a objetivos estelares con el dedo índice.",
     src: "models/brujula.glb",
     mission:
-      "Observa el mapa holográfico y determina la dirección correcta hacia la base lunar.",
+      "Apunta con el dedo índice a las estrellas que aparecen en pantalla y dispara. Derriba 5 objetivos para completar la misión.",
     gesture:
-      "Gesto esperado: señalar con el dedo índice la dirección elegida.",
+      "Levanta el dedo índice apuntando hacia arriba para disparar a las estrellas objetivo.",
     hotspots: [
       { pos: "0 0.7 0.2", normal: "0 1 0", title: "Aguja", text: "Apunta a la referencia estelar principal." },
       { pos: "0.9 0 0.2", normal: "1 0 0", title: "Anillo graduado", text: "Marca los grados para trazar el rumbo." }
@@ -53,12 +53,12 @@ export const STATIONS = {
     name: "Botiquín espacial",
     icon: "🧰",
     color: "#3ddc97",
-    skill: "Atender a un compañero herido con procedimientos básicos.",
+    skill: "Atender a un compañero herido: limpiar herida, aplicar medicina y vendar.",
     src: "models/botiquin.glb",
     mission:
-      "Un compañero de tripulación está herido en Marte. Sigue los pasos de primeros auxilios que indica el instructor.",
+      "Un compañero fue herido por radiación. Debes curarlo en 3 pasos: limpia la herida (mano abierta), aplica medicina (puño cerrado) y véndalo (mano abierta).",
     gesture:
-      "Gesto esperado: sonrisa para confirmar que el procedimiento fue completado con éxito.",
+      "Paso 1: mano abierta sobre la herida. Paso 2: puño cerrado (inyección). Paso 3: mano abierta para vendar.",
     hotspots: [
       { pos: "0 0 0.4", normal: "0 0 1", title: "Cruz médica", text: "Identifica el kit de emergencia de la tripulación." },
       { pos: "0.7 0 0.2", normal: "1 0 0", title: "Cierre hermético", text: "Mantiene el contenido estéril en vacío." }
@@ -71,12 +71,12 @@ export const STATIONS = {
     name: "Panel de oxígeno",
     icon: "🫧",
     color: "#8a7dff",
-    skill: "Racionar oxígeno y energía durante un viaje prolongado.",
+    skill: "Reparar un tanque de oxígeno dañado: localizar fuga, sellar y reconectar.",
     src: "models/panel_oxigeno.glb",
     mission:
-      "Administra los niveles de oxígeno y energía de la nave sin quedarte sin reservas antes de llegar a destino.",
+      "El tanque de O₂ tiene una fuga. Localiza la fuga (mano abierta), séllala (puño cerrado) y reconecta el tanque (mano abierta).",
     gesture:
-      "Gesto esperado: puño cerrado para confirmar 'recursos asegurados'.",
+      "Paso 1: mano abierta para escanear. Paso 2: puño cerrado sobre la fuga. Paso 3: mano abierta en la conexión.",
     hotspots: [
       { pos: "-0.55 0.2 0.15", normal: "0 0 1", title: "Reserva O₂", text: "Nunca bajes de la reserva mínima de emergencia." },
       { pos: "0.55 0.2 0.15", normal: "0 0 1", title: "Energía", text: "Prioriza el oxígeno si tienes que elegir." }
@@ -89,12 +89,12 @@ export const STATIONS = {
     name: "Guante de sincronización",
     icon: "🧤",
     color: "#ff6fae",
-    skill: "Coordinarte con tu tripulación en tiempo real.",
+    skill: "Reparar el sistema eléctrico de la nave reconectando cables.",
     src: "models/guante.glb",
     mission:
-      "Sincroniza tu guante con el de tu compañero de tripulación para completar la maniobra conjunta.",
+      "El sistema eléctrico está dañado. Agarra cada cable suelto (puño cerrado) y llévalo al conector correcto (mano abierta para soltar). Conecta los 3 cables.",
     gesture:
-      "Gesto esperado: choque de manos (high-five) frente a la cámara.",
+      "Puño cerrado para agarrar un cable, llévalo al conector derecho y abre la mano para conectarlo.",
     hotspots: [
       { pos: "0 0.75 0.2", normal: "0 0 1", title: "Sensores de dedo", text: "Miden la posición de cada dedo para sincronizar." },
       { pos: "0 0 0.25", normal: "0 0 1", title: "Palma háptica", text: "Vibra cuando la maniobra se completa." }
@@ -113,11 +113,11 @@ export const STATIONS = {
 export const KNOWLEDGE = {
   casco: {
     saludo:
-      "Cadete, bienvenido a la estación de sujeción de equipo. Tu casco debe quedar completamente asegurado antes de cualquier salida. Pregúntame lo que quieras o di 'pista' si necesitas ayuda.",
+      "Cadete, bienvenido. Debes agarrar el casco y colocarlo sobre el traje del astronauta. Cierra el puño para agarrarlo y ábrelo sobre la cabeza para asegurarlo. Pregúntame lo que quieras o di 'pista'.",
     pistas: [
       "Primera pista: revisa que el sello del visor esté firme, sin espacios de aire.",
       "Segunda pista: los broches laterales deben estar trabados, no solo apoyados.",
-      "Última pista: cuando todo esté asegurado, muestra la mano abierta frente a la cámara para confirmar."
+      "Última pista: lleva el casco hasta el círculo punteado sobre la cabeza del astronauta y abre la mano."
     ],
     completado:
       "Excelente trabajo, cadete. Equipo asegurado correctamente. Puedes avanzar a la siguiente estación.",
@@ -142,7 +142,7 @@ export const KNOWLEDGE = {
     pistas: [
       "Primera pista: observa el punto más brillante del mapa, ahí suele estar la referencia principal.",
       "Segunda pista: la base siempre está en la dirección opuesta a la estrella de emergencia.",
-      "Última pista: cuando tengas la dirección clara, señala con el dedo índice hacia la cámara."
+      "Última pista: levanta el índice apuntando arriba, el sistema dispara automáticamente al objetivo más cercano."
     ],
     completado:
       "Ruta confirmada, cadete. Buena orientación. Continúa a la siguiente estación.",
@@ -163,11 +163,11 @@ export const KNOWLEDGE = {
   },
   botiquin: {
     saludo:
-      "Estación de primeros auxilios. Un compañero de tripulación necesita atención inmediata. Pregúntame lo que quieras o di 'pista' si necesitas guía.",
+      "¡Emergencia médica! Un compañero fue alcanzado por radiación. Debes curarlo en 3 pasos con tus manos. Pregúntame o di 'pista' si necesitas guía.",
     pistas: [
-      "Primera pista: verifica primero que el compañero esté consciente y respirando.",
-      "Segunda pista: aplica el procedimiento básico de estabilización antes de mover a la persona.",
-      "Última pista: cuando el procedimiento esté completo, sonríe frente a la cámara para confirmar."
+      "Primera pista: abre la mano y mantenla sobre la zona roja (herida) para limpiarla.",
+      "Segunda pista: cierra el puño sobre la herida para aplicar la inyección de medicina.",
+      "Última pista: abre la mano de nuevo y mantenla sobre la zona para aplicar el vendaje."
     ],
     completado:
       "Procedimiento completado con éxito. Tu compañero está estable. Avanza a la siguiente estación.",
@@ -188,11 +188,11 @@ export const KNOWLEDGE = {
   },
   panel: {
     saludo:
-      "Estación de manejo de recursos. Debes racionar el oxígeno y la energía de la nave. Pregúntame lo que quieras o di 'pista' si lo necesitas.",
+      "¡Alerta! El tanque de O₂ tiene una fuga y se está perdiendo oxígeno. Debes repararlo en 3 pasos. Pregúntame o di 'pista'.",
     pistas: [
-      "Primera pista: no consumas más del 20% de una reserva en un solo paso.",
-      "Segunda pista: prioriza siempre el oxígeno sobre la energía si debes elegir.",
-      "Última pista: cuando termines de administrar los recursos, cierra el puño frente a la cámara."
+      "Primera pista: mueve la mano abierta por el tanque hasta que detectes la fuga (zona roja parpadeante).",
+      "Segunda pista: cierra el puño sobre la fuga y mantén la presión para sellarla.",
+      "Última pista: abre la mano sobre el conector inferior del tanque para reconectarlo."
     ],
     completado:
       "Recursos administrados correctamente. La nave está estable. Avanza a la siguiente estación.",
@@ -213,11 +213,11 @@ export const KNOWLEDGE = {
   },
   guante: {
     saludo:
-      "Última estación: sincronización de tripulación. Debes coordinarte con tu compañero para completar la maniobra. Pregúntame lo que quieras o di 'pista' si necesitas ayuda.",
+      "¡El sistema eléctrico de la nave falló! Hay 3 cables desconectados. Debes agarrar cada uno y llevarlo a su conector. Pregúntame o di 'pista'.",
     pistas: [
-      "Primera pista: la sincronización requiere que ambos confirmen al mismo tiempo.",
-      "Segunda pista: espera la señal visual antes de actuar.",
-      "Última pista: realiza un choque de manos frente a la cámara para completar el entrenamiento."
+      "Primera pista: cierra el puño cerca de un cable suelto del lado izquierdo para agarrarlo.",
+      "Segunda pista: arrastra el cable hasta el conector del mismo color en el lado derecho.",
+      "Última pista: abre la mano sobre el conector para soltar el cable y conectarlo."
     ],
     completado:
       "¡Sincronización perfecta! Has completado el entrenamiento de la Academia Espacial, cadete.",
