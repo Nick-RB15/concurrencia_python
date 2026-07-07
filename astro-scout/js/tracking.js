@@ -297,24 +297,37 @@ function updateCascoGame(gesture, handPos) {
 
 /* ========================================================================
    MINI-JUEGO BOTIQUIN — Cura al companero herido
-   Escenario: Un companero sufrio una herida por radiacion/impacto.
-   3 pasos: 1) Limpiar herida (mano abierta sobre zona), 2) Aplicar
-   medicina (puno cerrado = inyeccion), 3) Vendar (mano abierta desliza).
+   Escenario: Un companero sufrio una herida por impacto de meteorito.
+   Paso 1: Retirar 4 fragmentos de la herida (Pointing_Up = pinza,
+           acercar el dedo a cada fragmento para extraerlo).
+   Paso 2: Agarrar jeringa de la bandeja (Closed_Fist), arrastrarla
+           hasta la herida y hacer Thumb_Up para inyectar.
+   Paso 3: Vendar deslizando la mano (Open_Palm) de lado a lado sobre
+           la herida 4 veces (detecta cambios de direccion).
    ======================================================================== */
 let botiquinState = null;
 
 function initBotiquinGame(canvas) {
   const w = canvas.width, h = canvas.height;
+  const woundCenter = { x: w * 0.5, y: h * 0.48 };
+  const debris = [];
+  for (let i = 0; i < 4; i++) {
+    const a = (Math.PI * 2 / 4) * i + Math.random() * 0.5;
+    debris.push({
+      x: woundCenter.x + Math.cos(a) * (15 + Math.random() * 18),
+      y: woundCenter.y + Math.sin(a) * (12 + Math.random() * 14),
+      r: 3 + Math.random() * 3, removed: false, pulse: Math.random() * 6
+    });
+  }
   botiquinState = {
-    step: 0,     // 0=limpiar, 1=medicina, 2=vendar, 3=done
-    steps: [
-      { label: "LIMPIAR HERIDA", gesture: "Open_Palm", desc: "Mano abierta sobre la herida", zone: { x: w * 0.5, y: h * 0.45, r: 40 }, holdTime: 0, holdNeeded: 1500, color: "#4da6ff" },
-      { label: "APLICAR MEDICINA", gesture: "Closed_Fist", desc: "Puno cerrado = inyeccion", zone: { x: w * 0.5, y: h * 0.45, r: 40 }, holdTime: 0, holdNeeded: 1200, color: "#3ddc97" },
-      { label: "VENDAR", gesture: "Open_Palm", desc: "Mano abierta, desliza sobre la herida", zone: { x: w * 0.5, y: h * 0.45, r: 50 }, holdTime: 0, holdNeeded: 1800, color: "#ffb347" }
-    ],
-    handPos: null, completed: false, heartbeat: 0,
-    particles: [], successAlpha: 0,
-    patientPulse: 0
+    step: 0,  // 0=extraer, 1=inyectar, 2=vendar, 3=done
+    woundCenter, debris, debrisRemoved: 0,
+    syringePos: { x: w * 0.85, y: h * 0.25 },
+    syringeGrabbed: false, syringeAtWound: false, injecting: false, injectProgress: 0,
+    swipeCount: 0, swipesNeeded: 4, lastSwipeX: -1, swipeDir: 0, swipeActive: false,
+    bandageLines: [],
+    handPos: null, completed: false,
+    particles: [], successAlpha: 0, patientPulse: 0
   };
 }
 
@@ -324,21 +337,16 @@ function drawBotiquinGame(ctx, canvas) {
   ctx.clearRect(0, 0, w, h);
   botiquinState.patientPulse += 0.04;
 
-  // Draw patient (crewmate lying down)
-  drawPatient(ctx, w * 0.5, h * 0.5, w, h);
+  drawPatient(ctx, w * 0.5, h * 0.5, w, h, botiquinState.step);
 
   if (botiquinState.step >= 3) {
-    // Done - patient healed
     botiquinState.successAlpha = Math.min(botiquinState.successAlpha + 0.02, 1);
     ctx.globalAlpha = botiquinState.successAlpha;
     ctx.fillStyle = "#3ddc97"; ctx.font = "bold 14px 'Space Mono', monospace"; ctx.textAlign = "center";
     ctx.fillText("COMPANERO ESTABILIZADO", w / 2, h - 15);
-    // green glow over patient
     ctx.fillStyle = "rgba(61,220,151,0.15)";
-    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.45, 50, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.48, 50, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
-
-    // draw particles
     botiquinState.particles = botiquinState.particles.filter(p => p.life > 0);
     for (const p of botiquinState.particles) {
       p.x += p.vx; p.y += p.vy; p.life -= 0.02;
@@ -349,152 +357,316 @@ function drawBotiquinGame(ctx, canvas) {
     return;
   }
 
-  const currentStep = botiquinState.steps[botiquinState.step];
-
-  // Draw wound zone
-  const zone = currentStep.zone;
-  const woundPulse = 1 + Math.sin(botiquinState.patientPulse * 2) * 0.1;
+  // --- STEP 0: Extract debris ---
   if (botiquinState.step === 0) {
-    // wound - red glow
-    ctx.fillStyle = "rgba(255,80,80,0.2)";
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r * woundPulse, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "rgba(255,80,80,0.6)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r, 0, Math.PI * 2); ctx.stroke();
-  } else if (botiquinState.step === 1) {
-    // cleaned, needs medicine - yellow
-    ctx.fillStyle = "rgba(255,179,71,0.15)";
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "rgba(255,179,71,0.6)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r, 0, Math.PI * 2); ctx.stroke();
-  } else {
-    // medicated, needs bandage - blue
-    ctx.fillStyle = "rgba(77,166,255,0.15)";
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "rgba(77,166,255,0.6)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.r, 0, Math.PI * 2); ctx.stroke();
+    // wound glow
+    const wc = botiquinState.woundCenter;
+    const pulse = 1 + Math.sin(botiquinState.patientPulse * 2) * 0.1;
+    ctx.fillStyle = "rgba(255,80,80,0.15)";
+    ctx.beginPath(); ctx.arc(wc.x, wc.y, 35 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,80,80,0.5)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(wc.x, wc.y, 35, 0, Math.PI * 2); ctx.stroke();
+    // debris
+    for (const d of botiquinState.debris) {
+      if (d.removed) continue;
+      d.pulse += 0.08;
+      const glow = 0.6 + Math.sin(d.pulse) * 0.3;
+      ctx.fillStyle = `rgba(180,120,60,${glow})`;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y - d.r);
+      ctx.lineTo(d.x + d.r * 0.8, d.y + d.r * 0.5);
+      ctx.lineTo(d.x - d.r * 0.8, d.y + d.r * 0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#ffb347"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // tweezer cursor
+    if (botiquinState.handPos) {
+      const hp = botiquinState.handPos;
+      ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(hp.x - 2, hp.y - 10); ctx.lineTo(hp.x - 2, hp.y + 4);
+      ctx.lineTo(hp.x, hp.y + 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hp.x + 2, hp.y - 10); ctx.lineTo(hp.x + 2, hp.y + 4);
+      ctx.lineTo(hp.x, hp.y + 8); ctx.stroke();
+    }
+    ctx.fillStyle = "#ffb347"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
+    ctx.fillText("INDICE ARRIBA = PINZA. ACERCA A LOS FRAGMENTOS", w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText(`PASO 1/3: EXTRAER FRAGMENTOS (${botiquinState.debrisRemoved}/4)`, 10, 18);
   }
 
-  // Draw step progress bar
-  const prog = currentStep.holdTime / currentStep.holdNeeded;
-  drawProgressBar(ctx, w * 0.15, h - 35, w * 0.7, 10, prog, currentStep.color);
-
-  // Step label and instruction
-  ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
-  ctx.fillText(`PASO ${botiquinState.step + 1}/3: ${currentStep.label}`, 10, 18);
-  ctx.fillStyle = currentStep.color; ctx.font = "10px 'Space Mono', monospace";
-  ctx.fillText(currentStep.desc, 10, 32);
-
-  // Step indicators (top-right)
-  for (let i = 0; i < 3; i++) {
-    const sx = w - 70 + i * 22, sy = 14;
-    ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2);
-    if (i < botiquinState.step) { ctx.fillStyle = "#3ddc97"; ctx.fill(); }
-    else if (i === botiquinState.step) { ctx.fillStyle = currentStep.color; ctx.fill(); }
-    else { ctx.strokeStyle = "#233052"; ctx.lineWidth = 1.5; ctx.stroke(); }
+  // --- STEP 1: Inject medicine ---
+  if (botiquinState.step === 1) {
+    const wc = botiquinState.woundCenter;
+    ctx.fillStyle = "rgba(255,179,71,0.12)";
+    ctx.beginPath(); ctx.arc(wc.x, wc.y, 35, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,179,71,0.5)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(wc.x, wc.y, 35, 0, Math.PI * 2); ctx.stroke();
+    // syringe
+    const sp = botiquinState.syringeGrabbed && botiquinState.handPos
+      ? botiquinState.handPos : botiquinState.syringePos;
+    drawSyringe(ctx, sp.x, sp.y, botiquinState.injectProgress);
+    if (!botiquinState.syringeGrabbed) {
+      ctx.strokeStyle = "#3ddc97"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(botiquinState.syringePos.x, botiquinState.syringePos.y, 22, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#7c88a8"; ctx.font = "8px 'Space Mono', monospace"; ctx.textAlign = "center";
+      ctx.fillText("AGARRA", botiquinState.syringePos.x, botiquinState.syringePos.y + 32);
+    }
+    if (botiquinState.syringeAtWound && !botiquinState.injecting) {
+      ctx.fillStyle = "#3ddc97"; ctx.font = "10px 'Space Mono', monospace"; ctx.textAlign = "center";
+      ctx.fillText("PULGAR ARRIBA PARA INYECTAR", w / 2, h - 25);
+    }
+    if (botiquinState.injecting) {
+      drawProgressBar(ctx, w * 0.15, h - 38, w * 0.7, 10, botiquinState.injectProgress / 90, "#3ddc97");
+    }
+    drawHandCursor(ctx, botiquinState.handPos, botiquinState.syringeGrabbed, "#3ddc97");
+    ctx.fillStyle = botiquinState.syringeGrabbed ? "#3ddc97" : "#ffb347";
+    ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
+    const msg1 = botiquinState.syringeGrabbed
+      ? (botiquinState.syringeAtWound ? "PULGAR ARRIBA PARA INYECTAR" : "LLEVA LA JERINGA A LA HERIDA")
+      : "PUNO CERRADO PARA AGARRAR LA JERINGA";
+    ctx.fillText(msg1, w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText("PASO 2/3: INYECTAR MEDICINA", 10, 18);
   }
 
-  // Hand cursor
-  drawHandCursor(ctx, botiquinState.handPos, prog > 0, currentStep.color);
+  // --- STEP 2: Bandage (swipe) ---
+  if (botiquinState.step === 2) {
+    const wc = botiquinState.woundCenter;
+    ctx.fillStyle = "rgba(77,166,255,0.1)";
+    ctx.beginPath(); ctx.arc(wc.x, wc.y, 35, 0, Math.PI * 2); ctx.fill();
+    // swipe zone visual
+    ctx.strokeStyle = "rgba(77,166,255,0.4)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.roundRect(wc.x - 55, wc.y - 20, 110, 40, 8); ctx.stroke();
+    ctx.setLineDash([]);
+    // bandage lines already drawn
+    for (const bl of botiquinState.bandageLines) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.15 + bl.opacity * 0.2})`; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(bl.x1, bl.y); ctx.lineTo(bl.x2, bl.y); ctx.stroke();
+    }
+    // swipe arrows
+    const arrowY = wc.y;
+    ctx.fillStyle = "rgba(77,166,255,0.4)"; ctx.font = "16px 'Space Mono', monospace"; ctx.textAlign = "center";
+    const arrowPulse = Math.sin(botiquinState.patientPulse * 3) > 0;
+    if (arrowPulse) {
+      ctx.fillText("◄►", wc.x, arrowY + 4);
+    }
+    drawHandCursor(ctx, botiquinState.handPos, botiquinState.swipeActive, "#4da6ff");
+    drawProgressBar(ctx, w * 0.15, h - 38, w * 0.7, 10, botiquinState.swipeCount / botiquinState.swipesNeeded, "#4da6ff");
+    ctx.fillStyle = "#4da6ff"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
+    ctx.fillText("MANO ABIERTA: DESLIZA IZQUIERDA-DERECHA", w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText(`PASO 3/3: VENDAR (${botiquinState.swipeCount}/${botiquinState.swipesNeeded})`, 10, 18);
+  }
+
+  // Step indicators (all steps)
+  if (botiquinState.step < 3) {
+    for (let i = 0; i < 3; i++) {
+      const sx = w - 70 + i * 22, sy = 14;
+      ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+      if (i < botiquinState.step) { ctx.fillStyle = "#3ddc97"; ctx.fill(); }
+      else if (i === botiquinState.step) { ctx.fillStyle = ["#ffb347", "#3ddc97", "#4da6ff"][i]; ctx.fill(); }
+      else { ctx.strokeStyle = "#233052"; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+  }
 }
 
-function drawPatient(ctx, cx, cy, w, h) {
+function drawSyringe(ctx, x, y, injectProg) {
+  ctx.save(); ctx.translate(x, y);
+  // barrel
+  ctx.fillStyle = "#1a3050"; ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(-4, -18, 8, 28, 2); ctx.fill(); ctx.stroke();
+  // plunger
+  const plungerY = -18 - 10 + (injectProg / 90) * 10;
+  ctx.fillStyle = "#233052";
+  ctx.beginPath(); ctx.roundRect(-3, plungerY, 6, 10, 1); ctx.fill();
+  ctx.strokeStyle = "#4da6ff"; ctx.stroke();
+  // needle
+  ctx.strokeStyle = "#7c88a8"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, 18); ctx.stroke();
+  // liquid
+  const liquidH = 20 * (1 - injectProg / 90);
+  if (liquidH > 0) {
+    ctx.fillStyle = "rgba(61,220,151,0.5)";
+    ctx.beginPath(); ctx.roundRect(-3, 10 - liquidH, 6, liquidH, 1); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPatient(ctx, cx, cy, w, h, step) {
   ctx.save();
-  // body outline (lying crewmate seen from above/front)
   ctx.fillStyle = "#1a2540"; ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 1;
-  // torso
   ctx.beginPath(); ctx.roundRect(cx - 35, cy - 25, 70, 55, 6); ctx.fill(); ctx.stroke();
-  // head
   ctx.beginPath(); ctx.arc(cx, cy - 38, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  // visor on helmet
   ctx.fillStyle = "rgba(77,166,255,0.4)";
   ctx.beginPath(); ctx.arc(cx, cy - 36, 9, 0, Math.PI * 2); ctx.fill();
-  // arms
   ctx.fillStyle = "#1a2540";
   ctx.beginPath(); ctx.roundRect(cx - 50, cy - 15, 14, 40, 4); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.roundRect(cx + 36, cy - 15, 14, 40, 4); ctx.fill(); ctx.stroke();
-  // wound indicator (red cross)
-  ctx.strokeStyle = "rgba(255,80,80,0.7)"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
-  // label
+  if (step < 2) {
+    ctx.strokeStyle = "rgba(255,80,80,0.7)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
+  }
+  // heart monitor
+  ctx.fillStyle = step >= 3 ? "#3ddc97" : "#ff6b6b";
+  ctx.font = "7px 'Space Mono', monospace"; ctx.textAlign = "right";
+  ctx.fillText(step >= 3 ? "♥ ESTABLE" : "♥ CRITICO", cx + 48, cy + 42);
   ctx.fillStyle = "#7c88a8"; ctx.font = "8px 'Space Mono', monospace"; ctx.textAlign = "center";
-  ctx.fillText("TRIPULANTE HERIDO", cx, cy + 45);
+  ctx.fillText("TRIPULANTE HERIDO", cx, cy + 52);
   ctx.restore();
 }
 
 function updateBotiquinGame(gesture, handPos) {
   if (!botiquinState || botiquinState.completed || botiquinState.step >= 3) return false;
   botiquinState.handPos = handPos;
+  if (!handPos) return false;
 
-  const currentStep = botiquinState.steps[botiquinState.step];
-  const gestureMatch = gesture === currentStep.gesture;
-
-  if (gestureMatch && handPos) {
-    const zone = currentStep.zone;
-    const dist = Math.hypot(handPos.x - zone.x, handPos.y - zone.y);
-    if (dist < zone.r + 25) {
-      currentStep.holdTime += 16.67; // ~60fps
-      if (currentStep.holdTime >= currentStep.holdNeeded) {
-        botiquinState.step++;
-        window.AstroScout?.beep(520 + botiquinState.step * 120, 0.08);
-        if (botiquinState.step >= 3) {
-          botiquinState.completed = true;
-          // success particles
-          for (let i = 0; i < 20; i++) {
-            const a = (Math.PI * 2 / 20) * i;
+  // STEP 0: Extract debris with Pointing_Up (tweezer)
+  if (botiquinState.step === 0) {
+    if (gesture === "Pointing_Up") {
+      for (const d of botiquinState.debris) {
+        if (d.removed) continue;
+        if (Math.hypot(handPos.x - d.x, handPos.y - d.y) < 20) {
+          d.removed = true; botiquinState.debrisRemoved++;
+          window.AstroScout?.beep(600 + botiquinState.debrisRemoved * 100, 0.06);
+          // spark particles
+          for (let i = 0; i < 6; i++) {
+            const a = (Math.PI * 2 / 6) * i;
             botiquinState.particles.push({
-              x: zone.x, y: zone.y, vx: Math.cos(a) * (1 + Math.random() * 2),
-              vy: Math.sin(a) * (1 + Math.random() * 2), life: 1,
-              size: 2 + Math.random() * 3, color: "#3ddc97"
+              x: d.x, y: d.y, vx: Math.cos(a) * 2, vy: Math.sin(a) * 2,
+              life: 1, size: 2, color: "#ffb347"
             });
           }
-          return true;
+          if (botiquinState.debrisRemoved >= 4) {
+            botiquinState.step = 1;
+            window.AstroScout?.beep(700, 0.08);
+          }
+          break;
         }
       }
-    } else {
-      currentStep.holdTime = Math.max(0, currentStep.holdTime - 8);
     }
-  } else {
-    currentStep.holdTime = Math.max(0, currentStep.holdTime - 8);
+    return false;
+  }
+
+  // STEP 1: Inject — grab syringe (Closed_Fist), drag to wound, Thumb_Up to inject
+  if (botiquinState.step === 1) {
+    if (!botiquinState.syringeGrabbed) {
+      if (gesture === "Closed_Fist" && Math.hypot(handPos.x - botiquinState.syringePos.x, handPos.y - botiquinState.syringePos.y) < 35) {
+        botiquinState.syringeGrabbed = true;
+        window.AstroScout?.beep(520, 0.05);
+      }
+    } else {
+      const wc = botiquinState.woundCenter;
+      const nearWound = Math.hypot(handPos.x - wc.x, handPos.y - wc.y) < 45;
+      botiquinState.syringeAtWound = nearWound;
+      if (nearWound && gesture === "Thumb_Up") {
+        botiquinState.injecting = true;
+        botiquinState.injectProgress += 1.5;
+        if (botiquinState.injectProgress >= 90) {
+          botiquinState.step = 2;
+          botiquinState.injecting = false;
+          window.AstroScout?.beep(800, 0.08);
+        }
+      } else if (gesture !== "Closed_Fist" && gesture !== "Thumb_Up") {
+        // dropped syringe
+        if (!nearWound) {
+          botiquinState.syringeGrabbed = false;
+          botiquinState.syringeAtWound = false;
+        }
+      }
+    }
+    return false;
+  }
+
+  // STEP 2: Bandage — swipe Open_Palm left-right across wound
+  if (botiquinState.step === 2) {
+    if (gesture === "Open_Palm") {
+      const wc = botiquinState.woundCenter;
+      const inZone = Math.abs(handPos.y - wc.y) < 35 && Math.abs(handPos.x - wc.x) < 70;
+      botiquinState.swipeActive = inZone;
+      if (inZone) {
+        if (botiquinState.lastSwipeX >= 0) {
+          const dx = handPos.x - botiquinState.lastSwipeX;
+          const newDir = dx > 3 ? 1 : dx < -3 ? -1 : 0;
+          if (newDir !== 0 && newDir !== botiquinState.swipeDir && botiquinState.swipeDir !== 0) {
+            botiquinState.swipeCount++;
+            window.AstroScout?.beep(440 + botiquinState.swipeCount * 80, 0.05);
+            botiquinState.bandageLines.push({
+              x1: wc.x - 45, x2: wc.x + 45,
+              y: wc.y - 12 + botiquinState.swipeCount * 6, opacity: 1
+            });
+            if (botiquinState.swipeCount >= botiquinState.swipesNeeded) {
+              botiquinState.step = 3; botiquinState.completed = true;
+              window.AstroScout?.beep(880, 0.1);
+              for (let i = 0; i < 20; i++) {
+                const a = (Math.PI * 2 / 20) * i;
+                botiquinState.particles.push({
+                  x: wc.x, y: wc.y, vx: Math.cos(a) * 2, vy: Math.sin(a) * 2,
+                  life: 1, size: 2 + Math.random() * 3, color: "#3ddc97"
+                });
+              }
+              return true;
+            }
+          }
+          if (newDir !== 0) botiquinState.swipeDir = newDir;
+        }
+        botiquinState.lastSwipeX = handPos.x;
+      }
+    } else {
+      botiquinState.swipeActive = false;
+    }
+    return false;
   }
   return false;
 }
 
 /* ========================================================================
    MINI-JUEGO PANEL O2 — Repara el tanque de oxigeno danado
-   Escenario: El tanque tiene una fuga. 3 pasos:
-   1) Localizar fuga (mover mano abierta hasta encontrarla),
-   2) Sellar fuga (puno cerrado sostenido sobre la fuga),
-   3) Reconectar tanque (mano abierta sobre la conexion).
+   Paso 1: Escanear con Pointing_Up (detector). Un haz sigue el dedo.
+           Al pasar sobre la grieta oculta, el detector reacciona. Debes
+           mantener el haz 1s sobre ella para confirmar ubicacion.
+   Paso 2: Soldar la grieta trazando un camino con Closed_Fist.
+           La grieta es una linea curva; debes seguirla de un extremo
+           al otro sin alejarte mucho.
+   Paso 3: Agarrar la manguera de O2 (Closed_Fist), arrastrar al puerto
+           del tanque, y hacer Victory para abrir la valvula.
    ======================================================================== */
 let panelState = null;
 
 function initPanelGame(canvas) {
   const w = canvas.width, h = canvas.height;
-  panelState = {
-    step: 0,  // 0=localizar, 1=sellar, 2=reconectar, 3=done
-    leakPos: { x: w * 0.35 + Math.random() * w * 0.3, y: h * 0.3 + Math.random() * h * 0.2 },
-    connectPos: { x: w * 0.5, y: h * 0.72 },
-    handPos: null, holdTime: 0, completed: false,
-    bubbles: [], scanRadius: 0, scanFound: false,
-    sealProgress: 0, connectProgress: 0,
-    gasPulse: 0, successAlpha: 0,
-    particles: []
-  };
-  // generate initial leak bubbles
+  const tankCx = w * 0.5, tankCy = h * 0.42;
+  // crack: a series of points on the tank surface
+  const crackStart = { x: tankCx - 15, y: tankCy - 25 };
+  const crackPoints = [crackStart];
+  let cx = crackStart.x, cy = crackStart.y;
   for (let i = 0; i < 5; i++) {
-    panelState.bubbles.push(createBubble(panelState.leakPos));
+    cx += 5 + Math.random() * 6;
+    cy += (Math.random() - 0.4) * 8;
+    crackPoints.push({ x: cx, y: cy });
   }
+  panelState = {
+    step: 0,  // 0=escanear, 1=soldar, 2=reconectar, 3=done
+    tankCx, tankCy,
+    crackPoints, crackCenter: { x: (crackStart.x + cx) / 2, y: (crackStart.y + cy) / 2 },
+    crackFound: false, scanHoldTime: 0,
+    weldProgress: 0, weldPointIdx: 0,
+    hosePos: { x: w * 0.12, y: h * 0.7 }, hoseGrabbed: false,
+    portPos: { x: tankCx, y: tankCy + 52 },
+    hoseAtPort: false, valveOpening: false, valveProgress: 0,
+    handPos: null, completed: false,
+    bubbles: [], gasPulse: 0, successAlpha: 0, particles: [],
+    detectorBeep: 0
+  };
+  for (let i = 0; i < 5; i++) panelState.bubbles.push(createBubble(panelState.crackCenter));
 }
 
 function createBubble(origin) {
   return {
-    x: origin.x + (Math.random() - 0.5) * 20,
-    y: origin.y,
-    vx: (Math.random() - 0.5) * 1.5,
-    vy: -(1 + Math.random() * 2),
-    r: 2 + Math.random() * 4,
-    life: 1
+    x: origin.x + (Math.random() - 0.5) * 20, y: origin.y,
+    vx: (Math.random() - 0.5) * 1.5, vy: -(1 + Math.random() * 2),
+    r: 2 + Math.random() * 4, life: 1
   };
 }
 
@@ -504,19 +676,14 @@ function drawPanelGame(ctx, canvas) {
   ctx.clearRect(0, 0, w, h);
   panelState.gasPulse += 0.04;
 
-  // Draw O2 tank
-  drawO2Tank(ctx, w * 0.5, h * 0.42, w, h);
+  drawO2Tank(ctx, panelState.tankCx, panelState.tankCy, panelState.step);
 
   if (panelState.step >= 3) {
     panelState.successAlpha = Math.min(panelState.successAlpha + 0.02, 1);
     ctx.globalAlpha = panelState.successAlpha;
     ctx.fillStyle = "#3ddc97"; ctx.font = "bold 14px 'Space Mono', monospace"; ctx.textAlign = "center";
-    ctx.fillText("TANQUE REPARADO", w / 2, h - 15);
-    // green glow
-    ctx.fillStyle = "rgba(61,220,151,0.1)";
-    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.42, 60, 0, Math.PI * 2); ctx.fill();
+    ctx.fillText("TANQUE REPARADO Y CONECTADO", w / 2, h - 15);
     ctx.globalAlpha = 1;
-    // particles
     panelState.particles = panelState.particles.filter(p => p.life > 0);
     for (const p of panelState.particles) {
       p.x += p.vx; p.y += p.vy; p.life -= 0.015;
@@ -527,101 +694,183 @@ function drawPanelGame(ctx, canvas) {
     return;
   }
 
-  // Draw leak bubbles (steps 0 and 1)
+  // Leak bubbles (steps 0 and 1)
   if (panelState.step < 2) {
     panelState.bubbles = panelState.bubbles.filter(b => b.life > 0);
-    while (panelState.bubbles.length < 6) panelState.bubbles.push(createBubble(panelState.leakPos));
+    while (panelState.bubbles.length < 6) panelState.bubbles.push(createBubble(panelState.crackCenter));
     for (const b of panelState.bubbles) {
       b.x += b.vx; b.y += b.vy; b.life -= 0.01;
-      ctx.globalAlpha = b.life * 0.6;
-      ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 1;
+      ctx.globalAlpha = b.life * 0.5; ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
 
-  // Step 0: scan for leak
+  // --- STEP 0: Scan with detector ---
   if (panelState.step === 0) {
-    if (panelState.scanFound) {
-      // Show found leak
-      const lp = panelState.leakPos;
-      const pulse = 1 + Math.sin(panelState.gasPulse * 3) * 0.2;
-      ctx.strokeStyle = "rgba(255,80,80,0.8)"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(lp.x, lp.y, 18 * pulse, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = "rgba(255,80,80,0.15)";
-      ctx.beginPath(); ctx.arc(lp.x, lp.y, 18, 0, Math.PI * 2); ctx.fill();
+    // crack hidden unless found
+    if (panelState.crackFound) {
+      drawCrack(ctx, panelState.crackPoints, "rgba(255,80,80,0.8)");
     }
-    // scan ring from hand
+    // detector beam from finger
     if (panelState.handPos) {
-      ctx.strokeStyle = "rgba(77,166,255,0.3)"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.arc(panelState.handPos.x, panelState.handPos.y, 35, 0, Math.PI * 2); ctx.stroke();
+      const hp = panelState.handPos;
+      const dist = Math.hypot(hp.x - panelState.crackCenter.x, hp.y - panelState.crackCenter.y);
+      const intensity = Math.max(0, 1 - dist / 120);
+      // detector line
+      ctx.strokeStyle = `rgba(77,166,255,${0.3 + intensity * 0.5})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(hp.x, hp.y + 25); ctx.stroke();
+      // scan circle
+      ctx.strokeStyle = `rgba(77,166,255,${0.2 + intensity * 0.4})`; ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(hp.x, hp.y, 20, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
+      // proximity indicator bar
+      if (intensity > 0.3) {
+        const barColor = intensity > 0.7 ? "#ff6b6b" : "#ffb347";
+        drawProgressBar(ctx, hp.x - 20, hp.y - 25, 40, 5, intensity, barColor);
+      }
+    }
+    if (panelState.crackFound) {
+      drawProgressBar(ctx, w * 0.15, h - 38, w * 0.7, 10, panelState.scanHoldTime / 60, "#ff6b6b");
     }
     ctx.fillStyle = "#ffb347"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
-    ctx.fillText("MUEVE LA MANO PARA ENCONTRAR LA FUGA", w / 2, h - 12);
+    ctx.fillText("INDICE ARRIBA = DETECTOR. BUSCA LA GRIETA", w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText("PASO 1/3: ESCANEAR GRIETA", 10, 18);
   }
 
-  // Step 1: seal leak
+  // --- STEP 1: Weld along crack ---
   if (panelState.step === 1) {
-    const lp = panelState.leakPos;
-    ctx.strokeStyle = "rgba(255,80,80,0.6)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(lp.x, lp.y, 18, 0, Math.PI * 2); ctx.stroke();
-    drawProgressBar(ctx, w * 0.15, h - 35, w * 0.7, 10, panelState.sealProgress / 1500, "#ff6b6b");
-    ctx.fillStyle = "#ff6b6b"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
-    ctx.fillText("PUNO CERRADO SOBRE LA FUGA PARA SELLAR", w / 2, h - 12);
+    // draw crack with welded portion
+    const pts = panelState.crackPoints;
+    // unwelded part
+    if (panelState.weldPointIdx < pts.length - 1) {
+      ctx.strokeStyle = "rgba(255,80,80,0.7)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pts[panelState.weldPointIdx].x, pts[panelState.weldPointIdx].y);
+      for (let i = panelState.weldPointIdx + 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+    // welded part (green)
+    if (panelState.weldPointIdx > 0) {
+      ctx.strokeStyle = "rgba(61,220,151,0.8)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i <= panelState.weldPointIdx && i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+    // next point to weld indicator
+    if (panelState.weldPointIdx < pts.length) {
+      const target = pts[panelState.weldPointIdx];
+      const pls = 1 + Math.sin(panelState.gasPulse * 4) * 0.3;
+      ctx.strokeStyle = "#ff6b6b"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(target.x, target.y, 10 * pls, 0, Math.PI * 2); ctx.stroke();
+    }
+    // weld sparks near hand
+    if (panelState.handPos) {
+      const hp = panelState.handPos;
+      ctx.fillStyle = "#ffb347"; ctx.globalAlpha = 0.7;
+      for (let s = 0; s < 2; s++) {
+        ctx.beginPath();
+        ctx.arc(hp.x + (Math.random() - 0.5) * 12, hp.y + (Math.random() - 0.5) * 12,
+          1 + Math.random() * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    drawProgressBar(ctx, w * 0.15, h - 38, w * 0.7, 10, panelState.weldPointIdx / (pts.length - 1), "#ffb347");
+    drawHandCursor(ctx, panelState.handPos, true, "#ffb347");
+    ctx.fillStyle = "#ffb347"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
+    ctx.fillText("PUNO CERRADO: SUELDA SIGUIENDO LA GRIETA", w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText("PASO 2/3: SOLDAR GRIETA", 10, 18);
   }
 
-  // Step 2: reconnect
+  // --- STEP 2: Reconnect hose ---
   if (panelState.step === 2) {
-    const cp = panelState.connectPos;
-    ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(61,220,151,0.6)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cp.x, cp.y, 25, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(61,220,151,0.1)";
-    ctx.beginPath(); ctx.arc(cp.x, cp.y, 25, 0, Math.PI * 2); ctx.fill();
-    drawProgressBar(ctx, w * 0.15, h - 35, w * 0.7, 10, panelState.connectProgress / 1200, "#3ddc97");
+    // hose
+    const hPos = panelState.hoseGrabbed && panelState.handPos ? panelState.handPos : panelState.hosePos;
+    drawHose(ctx, hPos.x, hPos.y, panelState.hoseGrabbed);
+    // port indicator
+    const pp = panelState.portPos;
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(61,220,151,0.6)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(pp.x, pp.y, 18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#7c88a8"; ctx.font = "8px 'Space Mono', monospace"; ctx.textAlign = "center";
+    ctx.fillText("PUERTO", pp.x, pp.y + 28);
+    if (!panelState.hoseGrabbed) {
+      ctx.strokeStyle = "#3ddc97"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(panelState.hosePos.x, panelState.hosePos.y, 22, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#7c88a8"; ctx.font = "8px 'Space Mono', monospace";
+      ctx.fillText("AGARRA", panelState.hosePos.x, panelState.hosePos.y + 30);
+    }
+    if (panelState.hoseAtPort && !panelState.valveOpening) {
+      ctx.fillStyle = "#3ddc97"; ctx.font = "10px 'Space Mono', monospace"; ctx.textAlign = "center";
+      ctx.fillText("VICTORIA (V) PARA ABRIR VALVULA", w / 2, h - 25);
+    }
+    if (panelState.valveOpening) {
+      drawProgressBar(ctx, w * 0.15, h - 38, w * 0.7, 10, panelState.valveProgress / 80, "#3ddc97");
+    }
+    drawHandCursor(ctx, panelState.handPos, panelState.hoseGrabbed, "#3ddc97");
     ctx.fillStyle = "#3ddc97"; ctx.font = "11px 'Space Mono', monospace"; ctx.textAlign = "center";
-    ctx.fillText("MANO ABIERTA SOBRE LA CONEXION", w / 2, h - 12);
+    const msg2 = panelState.hoseGrabbed
+      ? (panelState.hoseAtPort ? "VICTORIA (V) PARA ABRIR VALVULA" : "LLEVA LA MANGUERA AL PUERTO")
+      : "PUNO CERRADO PARA AGARRAR MANGUERA";
+    ctx.fillText(msg2, w / 2, h - 12);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText("PASO 3/3: RECONECTAR O2", 10, 18);
   }
-
-  // Step label
-  const stepLabels = ["LOCALIZAR FUGA", "SELLAR FUGA", "RECONECTAR"];
-  ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
-  ctx.fillText(`PASO ${panelState.step + 1}/3: ${stepLabels[panelState.step]}`, 10, 18);
 
   // Step indicators
   for (let i = 0; i < 3; i++) {
     const sx = w - 70 + i * 22, sy = 14;
     ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2);
     if (i < panelState.step) { ctx.fillStyle = "#3ddc97"; ctx.fill(); }
-    else if (i === panelState.step) { ctx.fillStyle = "#4da6ff"; ctx.fill(); }
+    else if (i === panelState.step) { ctx.fillStyle = ["#ff6b6b", "#ffb347", "#3ddc97"][i]; ctx.fill(); }
     else { ctx.strokeStyle = "#233052"; ctx.lineWidth = 1.5; ctx.stroke(); }
   }
-
-  drawHandCursor(ctx, panelState.handPos, false);
 }
 
-function drawO2Tank(ctx, cx, cy, w, h) {
+function drawCrack(ctx, points, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+}
+
+function drawHose(ctx, x, y, grabbed) {
+  ctx.save(); ctx.translate(x, y);
+  // coiled hose
+  ctx.strokeStyle = grabbed ? "#3ddc97" : "#4da6ff"; ctx.lineWidth = 4; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 1.5); ctx.stroke();
+  // connector tip
+  ctx.fillStyle = "#233052";
+  ctx.beginPath(); ctx.roundRect(-5, -14, 10, 8, 2); ctx.fill();
+  ctx.strokeStyle = grabbed ? "#3ddc97" : "#4da6ff"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+}
+
+function drawO2Tank(ctx, cx, cy, step) {
   ctx.save();
-  // Tank body (cylindrical)
   ctx.fillStyle = "#1a2540";
   ctx.beginPath(); ctx.roundRect(cx - 30, cy - 45, 60, 90, 12); ctx.fill();
-  ctx.strokeStyle = "#4da6ff"; ctx.lineWidth = 1.5; ctx.stroke();
-  // Top valve
+  ctx.strokeStyle = step >= 2 ? "#3ddc97" : "#4da6ff"; ctx.lineWidth = 1.5; ctx.stroke();
   ctx.fillStyle = "#233052";
   ctx.beginPath(); ctx.roundRect(cx - 10, cy - 55, 20, 14, 4); ctx.fill();
   ctx.strokeStyle = "#4da6ff"; ctx.stroke();
-  // O2 label
-  ctx.fillStyle = "#4da6ff"; ctx.font = "bold 16px 'Space Mono', monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = step >= 3 ? "#3ddc97" : "#4da6ff";
+  ctx.font = "bold 16px 'Space Mono', monospace"; ctx.textAlign = "center";
   ctx.fillText("O\u2082", cx, cy + 5);
-  // Pressure gauge
+  // pressure gauge
   ctx.strokeStyle = "#233052"; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(cx, cy + 25, 10, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = "#ff6b6b"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(cx, cy + 25); ctx.lineTo(cx + 6, cy + 20); ctx.stroke();
-  // connection port at bottom
+  const gaugeAngle = step >= 3 ? -0.8 : 0.5;
+  ctx.strokeStyle = step >= 3 ? "#3ddc97" : "#ff6b6b"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy + 25);
+  ctx.lineTo(cx + Math.cos(gaugeAngle) * 7, cy + 25 + Math.sin(gaugeAngle) * -7); ctx.stroke();
+  // connection port
   ctx.fillStyle = "#233052";
   ctx.beginPath(); ctx.roundRect(cx - 12, cy + 45, 24, 10, 3); ctx.fill();
-  ctx.strokeStyle = "#4da6ff"; ctx.stroke();
+  ctx.strokeStyle = step >= 3 ? "#3ddc97" : "#4da6ff"; ctx.stroke();
   ctx.restore();
 }
 
@@ -630,57 +879,81 @@ function updatePanelGame(gesture, handPos) {
   panelState.handPos = handPos;
   if (!handPos) return false;
 
+  // STEP 0: Scan with Pointing_Up detector
   if (panelState.step === 0) {
-    // Scan for leak with open palm
-    if (gesture === "Open_Palm") {
-      const dist = Math.hypot(handPos.x - panelState.leakPos.x, handPos.y - panelState.leakPos.y);
-      if (dist < 40) {
-        if (!panelState.scanFound) {
-          panelState.scanFound = true;
+    if (gesture === "Pointing_Up") {
+      const dist = Math.hypot(handPos.x - panelState.crackCenter.x, handPos.y - panelState.crackCenter.y);
+      if (dist < 35) {
+        if (!panelState.crackFound) {
+          panelState.crackFound = true;
           window.AstroScout?.beep(880, 0.06);
         }
-        panelState.holdTime += 16.67;
-        if (panelState.holdTime > 800) {
-          panelState.step = 1; panelState.holdTime = 0;
+        panelState.scanHoldTime += 1;
+        if (panelState.scanHoldTime >= 60) {
+          panelState.step = 1;
           window.AstroScout?.beep(600, 0.08);
+        }
+      } else {
+        panelState.scanHoldTime = Math.max(0, panelState.scanHoldTime - 0.5);
+      }
+    }
+    return false;
+  }
+
+  // STEP 1: Weld along crack with Closed_Fist
+  if (panelState.step === 1) {
+    if (gesture === "Closed_Fist") {
+      const pts = panelState.crackPoints;
+      if (panelState.weldPointIdx < pts.length) {
+        const target = pts[panelState.weldPointIdx];
+        const dist = Math.hypot(handPos.x - target.x, handPos.y - target.y);
+        if (dist < 22) {
+          panelState.weldPointIdx++;
+          window.AstroScout?.beep(400 + panelState.weldPointIdx * 60, 0.04);
+          if (panelState.weldPointIdx >= pts.length) {
+            panelState.step = 2;
+            window.AstroScout?.beep(700, 0.08);
+          }
         }
       }
     }
-  } else if (panelState.step === 1) {
-    // Seal with closed fist
-    if (gesture === "Closed_Fist") {
-      const dist = Math.hypot(handPos.x - panelState.leakPos.x, handPos.y - panelState.leakPos.y);
-      if (dist < 40) {
-        panelState.sealProgress += 16.67;
-        if (panelState.sealProgress >= 1500) {
-          panelState.step = 2;
-          window.AstroScout?.beep(700, 0.08);
-        }
-      } else { panelState.sealProgress = Math.max(0, panelState.sealProgress - 8); }
-    } else { panelState.sealProgress = Math.max(0, panelState.sealProgress - 8); }
-  } else if (panelState.step === 2) {
-    // Reconnect with open palm
-    if (gesture === "Open_Palm") {
-      const dist = Math.hypot(handPos.x - panelState.connectPos.x, handPos.y - panelState.connectPos.y);
-      if (dist < 40) {
-        panelState.connectProgress += 16.67;
-        if (panelState.connectProgress >= 1200) {
+    return false;
+  }
+
+  // STEP 2: Reconnect hose — grab (Closed_Fist), drag to port, Victory to open valve
+  if (panelState.step === 2) {
+    if (!panelState.hoseGrabbed) {
+      if (gesture === "Closed_Fist" && Math.hypot(handPos.x - panelState.hosePos.x, handPos.y - panelState.hosePos.y) < 35) {
+        panelState.hoseGrabbed = true;
+        window.AstroScout?.beep(520, 0.05);
+      }
+    } else {
+      const nearPort = Math.hypot(handPos.x - panelState.portPos.x, handPos.y - panelState.portPos.y) < 30;
+      panelState.hoseAtPort = nearPort;
+      if (nearPort && gesture === "Victory") {
+        panelState.valveOpening = true;
+        panelState.valveProgress += 1.5;
+        if (panelState.valveProgress >= 80) {
           panelState.step = 3; panelState.completed = true;
           window.AstroScout?.beep(880, 0.1);
-          // success particles
           for (let i = 0; i < 20; i++) {
             const a = (Math.PI * 2 / 20) * i;
             panelState.particles.push({
-              x: panelState.connectPos.x, y: panelState.connectPos.y,
-              vx: Math.cos(a) * (1 + Math.random() * 2),
-              vy: Math.sin(a) * (1 + Math.random() * 2),
+              x: panelState.portPos.x, y: panelState.portPos.y,
+              vx: Math.cos(a) * 2, vy: Math.sin(a) * 2,
               life: 1, size: 2 + Math.random() * 3, color: "#3ddc97"
             });
           }
           return true;
         }
-      } else { panelState.connectProgress = Math.max(0, panelState.connectProgress - 8); }
-    } else { panelState.connectProgress = Math.max(0, panelState.connectProgress - 8); }
+      } else if (gesture !== "Closed_Fist" && gesture !== "Victory") {
+        if (!nearPort) {
+          panelState.hoseGrabbed = false;
+          panelState.hoseAtPort = false;
+        }
+      }
+    }
+    return false;
   }
   return false;
 }
@@ -690,28 +963,36 @@ function updatePanelGame(gesture, handPos) {
    Escenario: Cables desconectados en el panel electrico. El jugador debe
    conectar 3 pares de cables llevando la mano de un extremo al otro.
    Puno para agarrar el cable, mano abierta para soltar/conectar.
+   Los conectores de destino tienen el MISMO COLOR que el cable origen,
+   con etiquetas claras (ROJO, VERDE, NARANJA) para guiar al usuario.
+   Los destinos estan mezclados (no en el mismo orden que los origenes).
    ======================================================================== */
 let guanteState = null;
 
 function initGuanteGame(canvas) {
   const w = canvas.width, h = canvas.height;
   const colors = ["#ff6b6b", "#3ddc97", "#ffb347"];
+  const names = ["ROJO", "VERDE", "NARANJA"];
+  // Shuffle destination order so cables don't align horizontally
+  const destOrder = [0, 1, 2];
+  for (let i = destOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [destOrder[i], destOrder[j]] = [destOrder[j], destOrder[i]];
+  }
   const cables = [];
   for (let i = 0; i < 3; i++) {
     cables.push({
-      color: colors[i],
-      from: { x: 50, y: 55 + i * 65 },
-      to: { x: w - 50, y: 55 + i * 65 + (Math.random() - 0.5) * 40 },
-      connected: false,
-      grabbed: false,
-      grabEnd: null  // the loose end position while dragging
+      color: colors[i], name: names[i],
+      from: { x: 50, y: 60 + i * 70 },
+      to: { x: w - 50, y: 60 + destOrder[i] * 70 },
+      connected: false, grabbed: false, grabEnd: null
     });
   }
   guanteState = {
     cables, handPos: null, grabbing: false,
     activeCable: -1, completed: false,
     connectedCount: 0, sparkPhase: 0,
-    sparks: [], successAlpha: 0, particles: []
+    successAlpha: 0, particles: []
   };
 }
 
@@ -721,82 +1002,111 @@ function drawGuanteGame(ctx, canvas) {
   ctx.clearRect(0, 0, w, h);
   guanteState.sparkPhase += 0.06;
 
-  // Draw panel background
+  // Panel background
   ctx.fillStyle = "rgba(15,22,38,0.6)";
   ctx.beginPath(); ctx.roundRect(20, 20, w - 40, h - 40, 10); ctx.fill();
   ctx.strokeStyle = "#233052"; ctx.lineWidth = 1; ctx.stroke();
-  // Panel label
   ctx.fillStyle = "#7c88a8"; ctx.font = "9px 'Space Mono', monospace"; ctx.textAlign = "center";
   ctx.fillText("PANEL ELECTRICO - NAVE", w / 2, 38);
 
-  // Draw cables
+  // Column headers
+  ctx.fillStyle = "#4da6ff"; ctx.font = "bold 9px 'Space Mono', monospace";
+  ctx.textAlign = "left"; ctx.fillText("ORIGEN", 35, 45);
+  ctx.textAlign = "right"; ctx.fillText("DESTINO", w - 35, 45);
+
   for (let i = 0; i < guanteState.cables.length; i++) {
     const cable = guanteState.cables[i];
-    // left connector (fixed)
-    ctx.fillStyle = "#233052";
-    ctx.beginPath(); ctx.roundRect(cable.from.x - 15, cable.from.y - 10, 20, 20, 4); ctx.fill();
-    ctx.fillStyle = cable.color;
-    ctx.beginPath(); ctx.arc(cable.from.x, cable.from.y, 6, 0, Math.PI * 2); ctx.fill();
 
-    // right connector (target)
-    ctx.fillStyle = "#233052";
-    ctx.beginPath(); ctx.roundRect(cable.to.x - 5, cable.to.y - 10, 20, 20, 4); ctx.fill();
+    // ---- LEFT: source connector with color + label ----
+    // colored background plate
+    ctx.fillStyle = "rgba(15,22,38,0.9)";
+    ctx.beginPath(); ctx.roundRect(cable.from.x - 18, cable.from.y - 14, 56, 28, 5); ctx.fill();
+    ctx.strokeStyle = cable.color; ctx.lineWidth = 1.5; ctx.stroke();
+    // colored dot
+    ctx.fillStyle = cable.color;
+    ctx.beginPath(); ctx.arc(cable.from.x, cable.from.y, 7, 0, Math.PI * 2); ctx.fill();
+    // label next to dot
+    ctx.fillStyle = cable.color; ctx.font = "bold 9px 'Space Mono', monospace"; ctx.textAlign = "left";
+    ctx.fillText(cable.name, cable.from.x + 12, cable.from.y + 3);
+
+    // ---- RIGHT: destination connector with MATCHING color + label ----
+    ctx.fillStyle = "rgba(15,22,38,0.9)";
+    ctx.beginPath(); ctx.roundRect(cable.to.x - 38, cable.to.y - 14, 56, 28, 5); ctx.fill();
+    if (cable.connected) {
+      ctx.strokeStyle = cable.color; ctx.lineWidth = 2;
+    } else {
+      // pulsing border in the cable's color so user knows where it goes
+      const pulse = 0.5 + Math.sin(guanteState.sparkPhase + i * 2) * 0.3;
+      ctx.strokeStyle = cable.color; ctx.globalAlpha = pulse; ctx.lineWidth = 2;
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    // colored dot on right
     if (cable.connected) {
       ctx.fillStyle = cable.color;
     } else {
-      ctx.fillStyle = "#555";
+      // hollow colored circle
+      ctx.strokeStyle = cable.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cable.to.x, cable.to.y, 7, 0, Math.PI * 2); ctx.stroke();
+      // faint fill
+      ctx.fillStyle = cable.color; ctx.globalAlpha = 0.2;
     }
-    ctx.beginPath(); ctx.arc(cable.to.x, cable.to.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cable.to.x, cable.to.y, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // label next to right dot
+    ctx.fillStyle = cable.color; ctx.font = "bold 9px 'Space Mono', monospace"; ctx.textAlign = "right";
+    ctx.fillText(cable.name, cable.to.x - 12, cable.to.y + 3);
 
-    // Draw cable line
+    // ---- Cable line ----
     if (cable.connected) {
-      // connected cable: straight line
       ctx.strokeStyle = cable.color; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
-      ctx.beginPath(); ctx.moveTo(cable.from.x, cable.from.y); ctx.lineTo(cable.to.x, cable.to.y); ctx.stroke();
-      ctx.globalAlpha = 1;
-      // sparks at connection point
+      ctx.beginPath(); ctx.moveTo(cable.from.x + 7, cable.from.y);
+      ctx.bezierCurveTo(cable.from.x + 80, cable.from.y, cable.to.x - 80, cable.to.y, cable.to.x - 7, cable.to.y);
+      ctx.stroke(); ctx.globalAlpha = 1;
+      // connection sparks
       if (Math.sin(guanteState.sparkPhase + i * 2) > 0.7) {
         ctx.fillStyle = cable.color; ctx.globalAlpha = 0.8;
         for (let s = 0; s < 3; s++) {
           ctx.beginPath();
           ctx.arc(cable.to.x + (Math.random() - 0.5) * 10, cable.to.y + (Math.random() - 0.5) * 10,
-            1 + Math.random() * 2, 0, Math.PI * 2);
-          ctx.fill();
+            1 + Math.random() * 2, 0, Math.PI * 2); ctx.fill();
         }
         ctx.globalAlpha = 1;
       }
     } else if (cable.grabbed && cable.grabEnd) {
-      // being dragged
+      // dragging
       ctx.strokeStyle = cable.color; ctx.lineWidth = 3; ctx.globalAlpha = 0.7;
       ctx.setLineDash([6, 4]);
-      ctx.beginPath(); ctx.moveTo(cable.from.x, cable.from.y);
+      ctx.beginPath(); ctx.moveTo(cable.from.x + 7, cable.from.y);
       ctx.lineTo(cable.grabEnd.x, cable.grabEnd.y); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
-      // cable end follows hand
       ctx.fillStyle = cable.color;
       ctx.beginPath(); ctx.arc(cable.grabEnd.x, cable.grabEnd.y, 5, 0, Math.PI * 2); ctx.fill();
+      // draw arrow toward matching destination
+      const dx = cable.to.x - cable.grabEnd.x, dy = cable.to.y - cable.grabEnd.y;
+      const dd = Math.hypot(dx, dy);
+      if (dd > 40) {
+        const ax = cable.grabEnd.x + (dx / dd) * 25, ay = cable.grabEnd.y + (dy / dd) * 25;
+        ctx.fillStyle = cable.color; ctx.globalAlpha = 0.5;
+        ctx.beginPath(); ctx.arc(ax, ay, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
     } else {
       // disconnected, dangling
       const dangle = Math.sin(guanteState.sparkPhase + i) * 8;
       ctx.strokeStyle = cable.color; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.5;
-      ctx.beginPath(); ctx.moveTo(cable.from.x, cable.from.y);
-      ctx.quadraticCurveTo(cable.from.x + 40, cable.from.y + 30 + dangle,
-        cable.from.x + 60, cable.from.y + 20 + dangle);
+      ctx.beginPath(); ctx.moveTo(cable.from.x + 7, cable.from.y);
+      ctx.quadraticCurveTo(cable.from.x + 40, cable.from.y + 25 + dangle,
+        cable.from.x + 60, cable.from.y + 18 + dangle);
       ctx.stroke(); ctx.globalAlpha = 1;
-      // loose end spark
+      // loose spark
       if (Math.random() > 0.92) {
         ctx.fillStyle = "#fff";
         ctx.beginPath();
         ctx.arc(cable.from.x + 60 + (Math.random() - 0.5) * 6,
-          cable.from.y + 20 + dangle + (Math.random() - 0.5) * 6,
-          1 + Math.random(), 0, Math.PI * 2);
-        ctx.fill();
+          cable.from.y + 18 + dangle + (Math.random() - 0.5) * 6,
+          1 + Math.random(), 0, Math.PI * 2); ctx.fill();
       }
     }
-
-    // Cable label
-    ctx.fillStyle = cable.color; ctx.font = "8px 'Space Mono', monospace"; ctx.textAlign = "left";
-    ctx.fillText(`CABLE ${i + 1}`, cable.from.x + 10, cable.from.y - 15);
   }
 
   if (guanteState.completed) {
@@ -805,7 +1115,6 @@ function drawGuanteGame(ctx, canvas) {
     ctx.fillStyle = "#3ddc97"; ctx.font = "bold 14px 'Space Mono', monospace"; ctx.textAlign = "center";
     ctx.fillText("SISTEMA ELECTRICO REPARADO", w / 2, h - 15);
     ctx.globalAlpha = 1;
-    // particles
     guanteState.particles = guanteState.particles.filter(p => p.life > 0);
     for (const p of guanteState.particles) {
       p.x += p.vx; p.y += p.vy; p.life -= 0.015;
@@ -816,16 +1125,18 @@ function drawGuanteGame(ctx, canvas) {
     return;
   }
 
-  // Status bar
+  // Status
   ctx.fillStyle = "#fff"; ctx.font = "bold 12px 'Space Mono', monospace"; ctx.textAlign = "left";
   ctx.fillText(`CABLES: ${guanteState.connectedCount}/3`, 10, 18);
-  ctx.fillStyle = "#7c88a8"; ctx.font = "10px 'Space Mono', monospace";
-  const hint = guanteState.activeCable >= 0
-    ? "LLEVA EL CABLE AL CONECTOR DERECHO"
-    : "PUNO CERRADO CERCA DE UN CABLE PARA AGARRAR";
-  ctx.textAlign = "center"; ctx.fillText(hint, w / 2, h - 12);
+  ctx.fillStyle = "#7c88a8"; ctx.font = "10px 'Space Mono', monospace"; ctx.textAlign = "center";
+  if (guanteState.activeCable >= 0) {
+    const ac = guanteState.cables[guanteState.activeCable];
+    ctx.fillStyle = ac.color;
+    ctx.fillText(`LLEVA ${ac.name} AL CONECTOR ${ac.name} →`, w / 2, h - 12);
+  } else {
+    ctx.fillText("PUNO CERRADO CERCA DE UN CABLE PARA AGARRAR", w / 2, h - 12);
+  }
 
-  // Hand cursor
   drawHandCursor(ctx, guanteState.handPos, guanteState.grabbing, "#ffb347");
 }
 
@@ -837,7 +1148,6 @@ function updateGuanteGame(gesture, handPos) {
   guanteState.grabbing = isGrab;
 
   if (!handPos) {
-    // release if no hand
     if (guanteState.activeCable >= 0) {
       guanteState.cables[guanteState.activeCable].grabbed = false;
       guanteState.cables[guanteState.activeCable].grabEnd = null;
@@ -847,18 +1157,13 @@ function updateGuanteGame(gesture, handPos) {
   }
 
   if (guanteState.activeCable >= 0) {
-    // Currently dragging a cable
     const cable = guanteState.cables[guanteState.activeCable];
     if (isGrab) {
-      // keep dragging
       cable.grabEnd = { x: handPos.x, y: handPos.y };
     } else if (isOpen) {
-      // release - check if near target
       const dist = Math.hypot(handPos.x - cable.to.x, handPos.y - cable.to.y);
       if (dist < 35) {
-        cable.connected = true;
-        cable.grabbed = false;
-        cable.grabEnd = null;
+        cable.connected = true; cable.grabbed = false; cable.grabEnd = null;
         guanteState.connectedCount++;
         window.AstroScout?.beep(520 + guanteState.connectedCount * 120, 0.08);
         if (guanteState.connectedCount >= 3) {
@@ -875,20 +1180,15 @@ function updateGuanteGame(gesture, handPos) {
           }
           return true;
         }
-      } else {
-        cable.grabbed = false;
-        cable.grabEnd = null;
-      }
+      } else { cable.grabbed = false; cable.grabEnd = null; }
       guanteState.activeCable = -1;
     }
   } else {
-    // Not dragging - check for grab near cable starts
     if (isGrab) {
       for (let i = 0; i < guanteState.cables.length; i++) {
         const cable = guanteState.cables[i];
         if (cable.connected) continue;
-        const dist = Math.hypot(handPos.x - cable.from.x, handPos.y - cable.from.y);
-        if (dist < 45) {
+        if (Math.hypot(handPos.x - cable.from.x, handPos.y - cable.from.y) < 45) {
           cable.grabbed = true;
           cable.grabEnd = { x: handPos.x, y: handPos.y };
           guanteState.activeCable = i;
@@ -1084,9 +1384,9 @@ async function startStationCamera(container) {
   // Init mini-games
   if (station === "brujula") { initBrujulaGame(stCanvas); statusEl.textContent = "Apunta con el indice y dispara a las estrellas"; }
   else if (station === "casco") { initCascoGame(stCanvas); statusEl.textContent = "Cierra el puno para agarrar el casco"; }
-  else if (station === "botiquin") { initBotiquinGame(stCanvas); statusEl.textContent = "Cura al companero: paso 1 - limpia la herida"; }
-  else if (station === "panel") { initPanelGame(stCanvas); statusEl.textContent = "Localiza la fuga con la mano abierta"; }
-  else if (station === "guante") { initGuanteGame(stCanvas); statusEl.textContent = "Agarra los cables y conectalos"; }
+  else if (station === "botiquin") { initBotiquinGame(stCanvas); statusEl.textContent = "Indice arriba = pinza. Extrae los fragmentos"; }
+  else if (station === "panel") { initPanelGame(stCanvas); statusEl.textContent = "Indice arriba = detector. Busca la grieta"; }
+  else if (station === "guante") { initGuanteGame(stCanvas); statusEl.textContent = "Conecta cada cable al conector de su color"; }
   else { statusEl.textContent = "Camara activa. Realiza el gesto..."; }
 
   stLoop(statusEl, readEl, confEl);
@@ -1107,9 +1407,9 @@ function buildStationUI(container) {
   let extraInstructions = "";
   if (station === "brujula") extraInstructions = "<br><small style='color:#4da6ff'>Apunta con el dedo indice a las estrellas para disparar.</small>";
   else if (station === "casco") extraInstructions = "<br><small style='color:#4da6ff'>Cierra el puno para agarrar el casco y llevalo a la cabeza del astronauta.</small>";
-  else if (station === "botiquin") extraInstructions = "<br><small style='color:#3ddc97'>3 pasos: limpiar herida (mano abierta), aplicar medicina (puno), vendar (mano abierta).</small>";
-  else if (station === "panel") extraInstructions = "<br><small style='color:#8a7dff'>Localiza la fuga, sellala con el puno, y reconecta el tanque.</small>";
-  else if (station === "guante") extraInstructions = "<br><small style='color:#ff6fae'>Agarra cada cable (puno) y llevalo al conector (mano abierta para soltar).</small>";
+  else if (station === "botiquin") extraInstructions = "<br><small style='color:#3ddc97'>3 pasos: extraer fragmentos (indice=pinza), inyectar (puno+pulgar arriba), vendar (mano abierta desliza).</small>";
+  else if (station === "panel") extraInstructions = "<br><small style='color:#8a7dff'>3 pasos: escanear grieta (indice=detector), soldar (puno sigue linea), reconectar manguera (puno+victoria).</small>";
+  else if (station === "guante") extraInstructions = "<br><small style='color:#ff6fae'>Agarra cable (puno) y llevalo al conector del MISMO COLOR. Mano abierta suelta.</small>";
 
   container.innerHTML = `
     <div class="tk-wrap">

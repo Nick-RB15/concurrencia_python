@@ -56,9 +56,9 @@ export const STATIONS = {
     skill: "Atender a un compañero herido: limpiar herida, aplicar medicina y vendar.",
     src: "models/botiquin.glb",
     mission:
-      "Un compañero fue herido por radiación. Debes curarlo en 3 pasos: limpia la herida (mano abierta), aplica medicina (puño cerrado) y véndalo (mano abierta).",
+      "Un compañero fue impactado por un meteorito. Extrae los fragmentos con la pinza (índice arriba), inyecta medicina (agarra jeringa y pulgar arriba), y véndalo deslizando la mano.",
     gesture:
-      "Paso 1: mano abierta sobre la herida. Paso 2: puño cerrado (inyección). Paso 3: mano abierta para vendar.",
+      "Paso 1: índice arriba = pinza, toca fragmentos. Paso 2: puño agarra jeringa, pulgar arriba inyecta. Paso 3: mano abierta desliza izq-der.",
     hotspots: [
       { pos: "0 0 0.4", normal: "0 0 1", title: "Cruz médica", text: "Identifica el kit de emergencia de la tripulación." },
       { pos: "0.7 0 0.2", normal: "1 0 0", title: "Cierre hermético", text: "Mantiene el contenido estéril en vacío." }
@@ -74,9 +74,9 @@ export const STATIONS = {
     skill: "Reparar un tanque de oxígeno dañado: localizar fuga, sellar y reconectar.",
     src: "models/panel_oxigeno.glb",
     mission:
-      "El tanque de O₂ tiene una fuga. Localiza la fuga (mano abierta), séllala (puño cerrado) y reconecta el tanque (mano abierta).",
+      "El tanque de O₂ tiene una grieta. Escanea con el detector (índice arriba), suelda la grieta siguiendo la línea (puño), y reconecta la manguera (agarra + victoria para abrir válvula).",
     gesture:
-      "Paso 1: mano abierta para escanear. Paso 2: puño cerrado sobre la fuga. Paso 3: mano abierta en la conexión.",
+      "Paso 1: índice arriba = detector, busca grieta. Paso 2: puño sigue la grieta soldando. Paso 3: puño agarra manguera, victoria abre válvula.",
     hotspots: [
       { pos: "-0.55 0.2 0.15", normal: "0 0 1", title: "Reserva O₂", text: "Nunca bajes de la reserva mínima de emergencia." },
       { pos: "0.55 0.2 0.15", normal: "0 0 1", title: "Energía", text: "Prioriza el oxígeno si tienes que elegir." }
@@ -165,9 +165,9 @@ export const KNOWLEDGE = {
     saludo:
       "¡Emergencia médica! Un compañero fue alcanzado por radiación. Debes curarlo en 3 pasos con tus manos. Pregúntame o di 'pista' si necesitas guía.",
     pistas: [
-      "Primera pista: abre la mano y mantenla sobre la zona roja (herida) para limpiarla.",
-      "Segunda pista: cierra el puño sobre la herida para aplicar la inyección de medicina.",
-      "Última pista: abre la mano de nuevo y mantenla sobre la zona para aplicar el vendaje."
+      "Primera pista: levanta el índice (pinza) y acércalo a los fragmentos triangulares para extraerlos.",
+      "Segunda pista: cierra el puño sobre la jeringa para agarrarla, llévala a la herida y haz pulgar arriba para inyectar.",
+      "Última pista: abre la mano y deslízala de izquierda a derecha sobre la herida para vendar. Repite 4 veces."
     ],
     completado:
       "Procedimiento completado con éxito. Tu compañero está estable. Avanza a la siguiente estación.",
@@ -190,9 +190,9 @@ export const KNOWLEDGE = {
     saludo:
       "¡Alerta! El tanque de O₂ tiene una fuga y se está perdiendo oxígeno. Debes repararlo en 3 pasos. Pregúntame o di 'pista'.",
     pistas: [
-      "Primera pista: mueve la mano abierta por el tanque hasta que detectes la fuga (zona roja parpadeante).",
-      "Segunda pista: cierra el puño sobre la fuga y mantén la presión para sellarla.",
-      "Última pista: abre la mano sobre el conector inferior del tanque para reconectarlo."
+      "Primera pista: levanta el índice como detector y muévelo por el tanque. La barra se pone roja cuando estás cerca de la grieta.",
+      "Segunda pista: cierra el puño y sigue los puntos rojos de la grieta uno por uno para soldarla.",
+      "Última pista: agarra la manguera (puño), llévala al puerto del tanque, y haz victoria (V) para abrir la válvula."
     ],
     completado:
       "Recursos administrados correctamente. La nave está estable. Avanza a la siguiente estación.",
