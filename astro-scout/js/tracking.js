@@ -1410,9 +1410,21 @@ async function startStationCamera(container) {
   stCanvas = container.querySelector("#tk-canvas");
   stCtx = stCanvas.getContext("2d");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 360, height: 270 } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
     stVideo.srcObject = stream; await stVideo.play();
   } catch (e) { statusEl.textContent = "No se pudo acceder a la camara. Revisa los permisos."; return false; }
+
+  // Expand tracking area
+  const wrap = container.querySelector(".tk-wrap");
+  if (wrap) wrap.classList.add("tk-active");
+  // Resize canvas to match expanded stage
+  const stage = container.querySelector(".tk-stage");
+  if (stage) {
+    const rect = stage.getBoundingClientRect();
+    const cw = Math.round(rect.width) || 640;
+    const ch = Math.round(cw * 0.75);
+    stCanvas.width = cw; stCanvas.height = ch;
+  }
 
   const expected = GESTURE_MAP[window.CURRENT_STATION];
   try {
@@ -1445,6 +1457,12 @@ function stopStationCamera(container) {
   if (stRaf) cancelAnimationFrame(stRaf);
   if (stVideo && stVideo.srcObject) stVideo.srcObject.getTracks().forEach(t => t.stop());
   const s = container?.querySelector("#tk-status"); if (s) s.textContent = "Camara apagada.";
+  // Collapse tracking area back
+  const wrap = container?.querySelector(".tk-wrap");
+  if (wrap) wrap.classList.remove("tk-active");
+  // Reset canvas to default size
+  const canvas = container?.querySelector("#tk-canvas");
+  if (canvas) { canvas.width = 360; canvas.height = 270; }
   brujulaState = null; cascoState = null; botiquinState = null; panelState = null; guanteState = null;
 }
 
