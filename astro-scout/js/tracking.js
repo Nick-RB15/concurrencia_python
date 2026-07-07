@@ -1299,7 +1299,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawBrujulaGame(stCtx, stCanvas);
   } else if (station === "casco") {
-    const done = updateCascoGame(gesture2, { x: px, y: py });
+    const done = updateCascoGame(gesture, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "CASCO ASEGURADO";
@@ -1307,7 +1307,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawCascoGame(stCtx, stCanvas);
   } else if (station === "botiquin") {
-    const done = updateBotiquinGame(gesture2, { x: px, y: py });
+    const done = updateBotiquinGame(gesture, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "COMPANERO ESTABILIZADO";
@@ -1315,7 +1315,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawBotiquinGame(stCtx, stCanvas);
   } else if (station === "panel") {
-    const done = updatePanelGame(gesture2, { x: px, y: py });
+    const done = updatePanelGame(gesture, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "TANQUE REPARADO";
@@ -1323,7 +1323,7 @@ function handleMinigame(station, gesture, res, statusEl) {
     }
     drawPanelGame(stCtx, stCanvas);
   } else if (station === "guante") {
-    const done = updateGuanteGame(gesture2, { x: px, y: py });
+    const done = updateGuanteGame(gesture, { x: px, y: py });
     if (done && confirmedFor !== window.CURRENT_STATION) {
       confirmedFor = window.CURRENT_STATION;
       statusEl.textContent = "SISTEMA ELECTRICO REPARADO";
@@ -1414,18 +1414,6 @@ async function startStationCamera(container) {
     stVideo.srcObject = stream; await stVideo.play();
   } catch (e) { statusEl.textContent = "No se pudo acceder a la camara. Revisa los permisos."; return false; }
 
-  // Expand tracking area
-  const wrap = container.querySelector(".tk-wrap");
-  if (wrap) wrap.classList.add("tk-active");
-  // Resize canvas to match expanded stage
-  const stage = container.querySelector(".tk-stage");
-  if (stage) {
-    const rect = stage.getBoundingClientRect();
-    const cw = Math.round(rect.width) || 640;
-    const ch = Math.round(cw * 0.75);
-    stCanvas.width = cw; stCanvas.height = ch;
-  }
-
   const expected = GESTURE_MAP[window.CURRENT_STATION];
   try {
     if (expected?.type === "hand") await ensureGesture(statusEl);
@@ -1457,12 +1445,6 @@ function stopStationCamera(container) {
   if (stRaf) cancelAnimationFrame(stRaf);
   if (stVideo && stVideo.srcObject) stVideo.srcObject.getTracks().forEach(t => t.stop());
   const s = container?.querySelector("#tk-status"); if (s) s.textContent = "Camara apagada.";
-  // Collapse tracking area back
-  const wrap = container?.querySelector(".tk-wrap");
-  if (wrap) wrap.classList.remove("tk-active");
-  // Reset canvas to default size
-  const canvas = container?.querySelector("#tk-canvas");
-  if (canvas) { canvas.width = 720; canvas.height = 540; }
   brujulaState = null; cascoState = null; botiquinState = null; panelState = null; guanteState = null;
 }
 
