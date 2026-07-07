@@ -304,17 +304,9 @@ a{ color:inherit; }
 .tk-stage{ position:relative; width:360px; max-width:100%; transition:width .35s ease, height .35s ease; }
 .tk-stage video{ width:100%; border-radius:10px; border:1px solid var(--line); background:#000; transform:scaleX(-1); }
 .tk-stage canvas{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
-/* Expanded state when camera is active — nearly half screen or more */
-.tk-wrap.tk-active .tk-stage{ width:min(90vw, 100%); }
-.tk-wrap.tk-active .tk-conf{ width:min(90vw, 100%); }
-@media (min-width:900px){
-  .tk-wrap.tk-active .tk-stage{ width:min(55vw, 1000px); }
-  .tk-wrap.tk-active .tk-conf{ width:min(55vw, 1000px); }
-}
-@media (min-width:1200px){
-  .tk-wrap.tk-active .tk-stage{ width:min(50vw, 1050px); }
-  .tk-wrap.tk-active .tk-conf{ width:min(50vw, 1050px); }
-}
+/* Expanded state when camera is active */
+.tk-wrap.tk-active .tk-stage{ width:720px; max-width:100%; }
+.tk-wrap.tk-active .tk-conf{ width:720px; max-width:100%; }
 .tk-status{ margin-top:8px; font-family:'Space Mono',monospace; font-size:11px; color:var(--text-mute); letter-spacing:.03em; }
 .tk-expected{ font-family:'Space Mono',monospace; font-size:11px; color:var(--amber); margin-bottom:8px; letter-spacing:.03em; }
 .tk-gesture-read{ font-family:'Space Mono',monospace; font-size:11px; color:var(--glow); margin-top:6px; min-height:14px; }

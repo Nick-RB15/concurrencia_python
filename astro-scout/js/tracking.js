@@ -1410,7 +1410,7 @@ async function startStationCamera(container) {
   stCanvas = container.querySelector("#tk-canvas");
   stCtx = stCanvas.getContext("2d");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 540 } });
     stVideo.srcObject = stream; await stVideo.play();
   } catch (e) { statusEl.textContent = "No se pudo acceder a la camara. Revisa los permisos."; return false; }
 
@@ -1462,7 +1462,7 @@ function stopStationCamera(container) {
   if (wrap) wrap.classList.remove("tk-active");
   // Reset canvas to default size
   const canvas = container?.querySelector("#tk-canvas");
-  if (canvas) { canvas.width = 360; canvas.height = 270; }
+  if (canvas) { canvas.width = 720; canvas.height = 540; }
   brujulaState = null; cascoState = null; botiquinState = null; panelState = null; guanteState = null;
 }
 
@@ -1481,7 +1481,7 @@ function buildStationUI(container) {
       <div class="tk-expected">${expected ? "MISION: " + expected.label.toUpperCase() : ""}${extraInstructions}</div>
       <div class="tk-stage">
         <video id="tk-video" muted playsinline></video>
-        <canvas id="tk-canvas" width="360" height="270"></canvas>
+        <canvas id="tk-canvas" width="720" height="540"></canvas>
       </div>
       <div class="tk-conf"><div class="tk-conf-fill" id="tk-conf-fill"></div></div>
       <div class="tk-gesture-read" id="tk-read"></div>
